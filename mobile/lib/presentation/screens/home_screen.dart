@@ -102,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedImageFile = file;
       _selectedImageBytes = file.bytes;
       _imagePathController.text = file.name;
-      _selectedVolumeMethod = 'estimativa_assistida_imagem';
       _imageAnalysisError = null;
     });
   }
@@ -133,7 +132,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _latestImageAnalysis = analysis;
-        _selectedVolumeMethod = analysis.suggestion.suggestedVolumeMethod;
         if (analysis.suggestion.suggestedWasteType != null) {
           _selectedWasteType = analysis.suggestion.suggestedWasteType!;
         }
@@ -163,6 +161,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _submitEstimate() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_selectedVolumeMethod == 'estimativa_assistida_imagem') {
+      setState(() {
+        _submissionError =
+            'A imagem ajuda a classificar o residuo, mas ainda nao calcula volume. Escolha recipiente conhecido ou dimensoes manuais para estimar a massa.';
+      });
       return;
     }
 
@@ -714,14 +720,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ] else ...[
-                TextFormField(
-                  controller: _imagePathController,
-                  readOnly: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Imagem selecionada',
-                    helperText:
-                        'Use a secao de analise assistida para enviar a imagem.',
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextFormField(
+                      controller: _imagePathController,
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Imagem selecionada',
+                        helperText:
+                            'Use a secao de analise assistida para enviar a imagem.',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Volume por imagem ainda nao esta habilitado neste MVP. Use a imagem para sugerir o tipo de residuo e depois escolha recipiente conhecido ou dimensoes manuais.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF7A4510),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ],
               const SizedBox(height: 14),

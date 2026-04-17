@@ -59,4 +59,7 @@ class EstimationService:
             return dimensions.length_m * dimensions.width_m * dimensions.height_m
 
         self.cv_support_service.analyze_image(payload.image_assisted)
-        return 0.0
+        raise ValueError(
+            "A estimativa assistida por imagem ainda nao calcula volume automaticamente. "
+            "Use recipiente conhecido ou dimensoes manuais para obter a massa estimada."
+        )

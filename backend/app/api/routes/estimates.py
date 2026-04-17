@@ -19,7 +19,10 @@ cv_support_service = ComputerVisionSupportService()
 
 @router.post("", response_model=EstimateResponse, status_code=status.HTTP_201_CREATED)
 def create_estimate(payload: EstimateRequest) -> EstimateResponse:
-    result = estimation_service.estimate(payload)
+    try:
+        result = estimation_service.estimate(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     stored_record = history_repository.save_estimation(payload, result)
     return EstimateResponse(result=result, record=EstimationRecord.model_validate(stored_record))
 
