@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../data/models/estimate_response.dart';
 import '../../data/models/estimation_record.dart';
@@ -12,6 +11,7 @@ import '../../data/models/waste_option.dart';
 import '../../data/repositories/reference_data_repository.dart';
 import '../../domain/entities/app_status.dart';
 import '../../services/backend_service.dart';
+import '../../services/camera_capture_service.dart';
 import '../../widgets/analysis_metric_chip.dart';
 import '../../widgets/result_metric_tile.dart';
 import '../../widgets/status_badge.dart';
@@ -37,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _imagePathController = TextEditingController();
   final _contentDescriptionController = TextEditingController();
   final _notesController = TextEditingController();
-  final _imagePicker = ImagePicker();
+  final _cameraCaptureService = buildCameraCaptureService();
 
   late Future<AppStatus> _statusFuture;
   late Future<List<EstimationRecord>> _historyFuture;
@@ -105,37 +105,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _captureImage() async {
     try {
-      final captured = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-      );
-
+      final captured = await _cameraCaptureService.captureImage();
       if (captured == null) {
         return;
       }
 
-      final bytes = await captured.readAsBytes();
-      final fileName = captured.name.isNotEmpty
-          ? captured.name
-          : 'captura-camera.jpg';
-
       _setSelectedImage(
         file: PlatformFile(
-          name: fileName,
-          size: bytes.lengthInBytes,
-          bytes: bytes,
+          name: captured.fileName,
+          size: captured.bytes.lengthInBytes,
+          bytes: captured.bytes,
           path: captured.path,
         ),
-        bytes: bytes,
-        fileName: fileName,
+        bytes: captured.bytes,
+        fileName: captured.fileName,
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _imageAnalysisError =
-            'Nao foi possivel acessar a camera neste dispositivo ou navegador.';
+        _imageAnalysisError = error.toString().replaceFirst('Exception: ', '');
       });
     }
   }
