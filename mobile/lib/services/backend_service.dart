@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image/image.dart' as img;
+import 'package:mime/mime.dart';
 
 import '../data/models/estimate_response.dart';
 import '../data/models/estimation_record.dart';
@@ -12,7 +14,7 @@ import '../data/models/image_analysis.dart';
 import '../domain/entities/app_status.dart';
 
 class BackendService {
-  static const int _maxUploadBytes = 4 * 1024 * 1024;
+  static const int _targetUploadBytes = 3 * 1024 * 1024;
 
   BackendService({http.Client? client, String? baseUrl})
     : _client = client ?? http.Client(),
@@ -90,8 +92,11 @@ class BackendService {
   }
 
   Future<ImageAnalysisResponse> analyzeImage(PlatformFile file) async {
-    final originalBytes = file.bytes;
-    final bytes = _prepareImageForUpload(originalBytes);
+    final preparedImage = _prepareImageForUpload(
+      bytes: file.bytes,
+      originalName: file.name,
+    );
+    final bytes = preparedImage.bytes;
     if (bytes == null || bytes.isEmpty) {
       throw Exception('Nao foi possivel ler os bytes da imagem selecionada.');
     }
@@ -101,7 +106,12 @@ class BackendService {
       Uri.parse('$baseUrl/estimates/analyze-image'),
     );
     request.files.add(
-      http.MultipartFile.fromBytes('file', bytes, filename: file.name),
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: preparedImage.filename,
+        contentType: preparedImage.mediaType,
+      ),
     );
 
     final streamedResponse = await request.send();
@@ -116,13 +126,28 @@ class BackendService {
     );
   }
 
-  Uint8List? _prepareImageForUpload(Uint8List? bytes) {
+  _PreparedImage _prepareImageForUpload({
+    required Uint8List? bytes,
+    required String originalName,
+  }) {
     if (bytes == null || bytes.isEmpty) {
-      return bytes;
+      return _PreparedImage(
+        bytes: bytes,
+        filename: originalName,
+        mediaType:
+            _mediaTypeFromFilename(originalName) ?? MediaType('image', 'jpeg'),
+      );
     }
 
-    if (bytes.lengthInBytes <= _maxUploadBytes) {
-      return bytes;
+    final originalMediaType =
+        _mediaTypeFromFilename(originalName) ?? MediaType('image', 'jpeg');
+
+    if (bytes.lengthInBytes <= _targetUploadBytes) {
+      return _PreparedImage(
+        bytes: bytes,
+        filename: originalName,
+        mediaType: originalMediaType,
+      );
     }
 
     final decoded = img.decodeImage(bytes);
@@ -133,43 +158,68 @@ class BackendService {
     }
 
     var workingImage = decoded;
-    if (workingImage.width > 1600 || workingImage.height > 1600) {
+    if (workingImage.width > 1400 || workingImage.height > 1400) {
       workingImage = img.copyResize(
         workingImage,
-        width: workingImage.width >= workingImage.height ? 1600 : null,
-        height: workingImage.height > workingImage.width ? 1600 : null,
+        width: workingImage.width >= workingImage.height ? 1400 : null,
+        height: workingImage.height > workingImage.width ? 1400 : null,
         interpolation: img.Interpolation.average,
       );
     }
 
-    for (final quality in [82, 72, 62, 52, 42]) {
+    for (final quality in [76, 66, 58, 50, 42]) {
       final encoded = Uint8List.fromList(
         img.encodeJpg(workingImage, quality: quality),
       );
-      if (encoded.lengthInBytes <= _maxUploadBytes) {
-        return encoded;
+      if (encoded.lengthInBytes <= _targetUploadBytes) {
+        return _PreparedImage(
+          bytes: encoded,
+          filename: _jpegFilename(originalName),
+          mediaType: MediaType('image', 'jpeg'),
+        );
       }
     }
 
     workingImage = img.copyResize(
       workingImage,
-      width: workingImage.width >= workingImage.height ? 1280 : null,
-      height: workingImage.height > workingImage.width ? 1280 : null,
+      width: workingImage.width >= workingImage.height ? 1024 : null,
+      height: workingImage.height > workingImage.width ? 1024 : null,
       interpolation: img.Interpolation.average,
     );
 
-    for (final quality in [60, 50, 40, 35]) {
+    for (final quality in [50, 42, 35, 28]) {
       final encoded = Uint8List.fromList(
         img.encodeJpg(workingImage, quality: quality),
       );
-      if (encoded.lengthInBytes <= _maxUploadBytes) {
-        return encoded;
+      if (encoded.lengthInBytes <= _targetUploadBytes) {
+        return _PreparedImage(
+          bytes: encoded,
+          filename: _jpegFilename(originalName),
+          mediaType: MediaType('image', 'jpeg'),
+        );
       }
     }
 
     throw Exception(
       'A imagem continua grande demais para envio. Tente uma foto menor ou com menor resolucao.',
     );
+  }
+
+  MediaType? _mediaTypeFromFilename(String filename) {
+    final mimeType = lookupMimeType(filename);
+    if (mimeType == null || !mimeType.contains('/')) {
+      return null;
+    }
+    final parts = mimeType.split('/');
+    return MediaType(parts.first, parts.last);
+  }
+
+  String _jpegFilename(String originalName) {
+    final dotIndex = originalName.lastIndexOf('.');
+    if (dotIndex == -1) {
+      return '$originalName.jpg';
+    }
+    return '${originalName.substring(0, dotIndex)}.jpg';
   }
 
   String _extractErrorMessage(String body) {
@@ -183,4 +233,16 @@ class BackendService {
     }
     return 'Nao foi possivel concluir a operacao com o backend.';
   }
+}
+
+class _PreparedImage {
+  const _PreparedImage({
+    required this.bytes,
+    required this.filename,
+    required this.mediaType,
+  });
+
+  final Uint8List? bytes;
+  final String filename;
+  final MediaType mediaType;
 }
