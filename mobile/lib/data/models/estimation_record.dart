@@ -10,6 +10,7 @@ class EstimationRecord {
     required this.upperBoundKg,
     required this.confidenceLevel,
     required this.createdAt,
+    this.contentDescription,
     this.notes,
   });
 
@@ -23,6 +24,7 @@ class EstimationRecord {
   final double upperBoundKg;
   final String confidenceLevel;
   final DateTime createdAt;
+  final String? contentDescription;
   final String? notes;
 
   factory EstimationRecord.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,7 @@ class EstimationRecord {
       upperBoundKg: (json['upper_bound_kg'] as num).toDouble(),
       confidenceLevel: json['confidence_level'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
+      contentDescription: json['content_description'] as String?,
       notes: json['notes'] as String?,
     );
   }

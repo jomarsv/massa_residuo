@@ -32,4 +32,12 @@ def init_db() -> None:
             )
             """
         )
+        existing_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(estimation_history)").fetchall()
+        }
+        if "content_description" not in existing_columns:
+            connection.execute(
+                "ALTER TABLE estimation_history ADD COLUMN content_description TEXT"
+            )
         connection.commit()

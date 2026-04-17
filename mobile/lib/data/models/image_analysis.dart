@@ -31,6 +31,8 @@ class ImageAnalysisSuggestion {
     required this.confidenceScore,
     required this.confidenceLabel,
     required this.rationale,
+    required this.usedUserContext,
+    required this.contextSummary,
   });
 
   final String? suggestedWasteType;
@@ -38,6 +40,8 @@ class ImageAnalysisSuggestion {
   final double confidenceScore;
   final String confidenceLabel;
   final String rationale;
+  final bool usedUserContext;
+  final String? contextSummary;
 
   factory ImageAnalysisSuggestion.fromJson(Map<String, dynamic> json) {
     return ImageAnalysisSuggestion(
@@ -46,6 +50,8 @@ class ImageAnalysisSuggestion {
       confidenceScore: (json['confidence_score'] as num).toDouble(),
       confidenceLabel: json['confidence_label'] as String,
       rationale: json['rationale'] as String,
+      usedUserContext: json['used_user_context'] as bool? ?? false,
+      contextSummary: json['context_summary'] as String?,
     );
   }
 }

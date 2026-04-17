@@ -53,7 +53,10 @@ class FakeBackendService extends BackendService {
   }
 
   @override
-  Future<ImageAnalysisResponse> analyzeImage(file) async {
+  Future<ImageAnalysisResponse> analyzeImage(
+    file, {
+    String? contentDescription,
+  }) async {
     throw UnimplementedError();
   }
 }
@@ -66,9 +69,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Estimativa de massa de residuos'), findsOneWidget);
-    expect(find.textContaining('Fase 3'), findsOneWidget);
+    expect(find.textContaining('Fase 3.5'), findsOneWidget);
     expect(find.text('Analise assistida por imagem'), findsOneWidget);
-    expect(find.text('Nova analise'), findsOneWidget);
-    expect(find.text('Calcular estimativa'), findsOneWidget);
+    expect(
+      find.text('O que ha no resíduo ou dentro dos sacos?'),
+      findsOneWidget,
+    );
+    expect(find.text('Selecionar imagem'), findsOneWidget);
   });
 }

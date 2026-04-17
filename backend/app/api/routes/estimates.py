@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.repositories.history_repository import HistoryRepository
 from app.schemas.estimation import (
@@ -25,7 +25,10 @@ def create_estimate(payload: EstimateRequest) -> EstimateResponse:
 
 
 @router.post("/analyze-image", response_model=ImageAnalysisResponse)
-async def analyze_image(file: UploadFile = File(...)) -> ImageAnalysisResponse:
+async def analyze_image(
+    file: UploadFile = File(...),
+    content_description: str | None = Form(default=None),
+) -> ImageAnalysisResponse:
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -44,6 +47,7 @@ async def analyze_image(file: UploadFile = File(...)) -> ImageAnalysisResponse:
             filename=file.filename or "imagem-sem-nome",
             content_type=file.content_type,
             file_bytes=file_bytes,
+            content_description=content_description,
         )
     except ValueError as exc:
         raise HTTPException(

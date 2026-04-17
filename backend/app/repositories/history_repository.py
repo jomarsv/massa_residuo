@@ -21,6 +21,7 @@ class HistoryRepository:
             "lower_bound_kg": result.lower_bound_kg,
             "upper_bound_kg": result.upper_bound_kg,
             "confidence_level": result.confidence_level,
+            "content_description": request.content_description,
             "notes": request.notes,
             "created_at": created_at,
         }
@@ -48,9 +49,10 @@ class HistoryRepository:
                     lower_bound_kg,
                     upper_bound_kg,
                     confidence_level,
+                    content_description,
                     notes,
                     created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 tuple(payload.values()),
             )
@@ -84,6 +86,7 @@ class HistoryRepository:
                     lower_bound_kg,
                     upper_bound_kg,
                     confidence_level,
+                    content_description,
                     notes,
                     created_at
                 FROM estimation_history
@@ -115,6 +118,7 @@ class HistoryRepository:
                     lower_bound_kg,
                     upper_bound_kg,
                     confidence_level,
+                    content_description,
                     notes,
                     created_at
                 FROM estimation_history
@@ -139,6 +143,7 @@ class HistoryRepository:
             "lower_bound_kg": data["lower_bound_kg"],
             "upper_bound_kg": data["upper_bound_kg"],
             "confidence_level": data["confidence_level"],
+            "content_description": data.get("content_description"),
             "notes": data.get("notes"),
             "created_at": data["created_at"],
         }

@@ -34,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _widthController = TextEditingController(text: '1.0');
   final _heightController = TextEditingController(text: '1.0');
   final _imagePathController = TextEditingController();
+  final _contentDescriptionController = TextEditingController();
   final _notesController = TextEditingController();
 
   late Future<AppStatus> _statusFuture;
@@ -80,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _widthController.dispose();
     _heightController.dispose();
     _imagePathController.dispose();
+    _contentDescriptionController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -121,7 +123,10 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final analysis = await widget.backendService.analyzeImage(file);
+      final analysis = await widget.backendService.analyzeImage(
+        file,
+        contentDescription: _contentDescriptionController.text,
+      );
       if (!mounted) {
         return;
       }
@@ -201,6 +206,9 @@ class _HomeScreenState extends State<HomeScreen> {
       'moisture_condition': _selectedMoistureCondition,
       'compaction_condition': _selectedCompactionCondition,
       'heterogeneity_condition': _selectedHeterogeneityCondition,
+      'content_description': _contentDescriptionController.text.trim().isEmpty
+          ? null
+          : _contentDescriptionController.text.trim(),
       'notes': _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
@@ -284,7 +292,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Fase 3: upload real de imagem, analise assistida com OpenCV e sugestoes de preenchimento antes do calculo.',
+                  'Fase 3.5: descricao textual do conteudo, analise assistida por imagem e preenchimento hibrido antes do calculo.',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 18),
@@ -353,8 +361,20 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Selecione uma imagem do residuo para obter uma sugestao visual de preenchimento. A confianca continua limitada.',
+              'Selecione uma imagem do residuo e descreva o conteudo observado. A descricao do usuario tem prioridade sobre a heuristica visual nesta fase.',
               style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _contentDescriptionController,
+              minLines: 2,
+              maxLines: 4,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'O que ha no resíduo ou dentro dos sacos?',
+                helperText:
+                    'Ex.: folhas, galhos, restos de poda, latas, papelao, entulho de obra.',
+              ),
             ),
             const SizedBox(height: 16),
             Wrap(
@@ -452,6 +472,16 @@ class _HomeScreenState extends State<HomeScreen> {
             'Confianca: ${suggestion.confidenceLabel} (${suggestion.confidenceScore.toStringAsFixed(2)})',
             style: theme.textTheme.bodyMedium,
           ),
+          if (suggestion.usedUserContext &&
+              suggestion.contextSummary != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Contexto do usuario: ${suggestion.contextSummary}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 6),
           Text(suggestion.rationale, style: theme.textTheme.bodyMedium),
           const SizedBox(height: 10),
@@ -501,6 +531,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 18),
+              if (_contentDescriptionController.text.trim().isNotEmpty) ...[
+                Text(
+                  'Conteudo informado: ${_contentDescriptionController.text.trim()}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               _buildDropdown<String>(
                 label: 'Tipo predominante de residuo',
                 value: _selectedWasteType,
@@ -787,6 +826,14 @@ class _HomeScreenState extends State<HomeScreen> {
               'Fatores aplicados: umidade ${result.appliedFactors.moistureFactor.toStringAsFixed(2)}, compactacao ${result.appliedFactors.compactionFactor.toStringAsFixed(2)}, mistura ${result.appliedFactors.heterogeneityFactor.toStringAsFixed(2)}.',
               style: theme.textTheme.bodyMedium,
             ),
+            if (estimate.record.contentDescription != null &&
+                estimate.record.contentDescription!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Conteudo informado: ${estimate.record.contentDescription!}',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
           ],
         ),
       ),
@@ -883,6 +930,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                 color: const Color(0xFF6A756C),
                               ),
                             ),
+                            if (record.contentDescription != null &&
+                                record.contentDescription!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Conteudo informado: ${record.contentDescription!}',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ],
                             if (record.notes != null &&
                                 record.notes!.isNotEmpty) ...[
                               const SizedBox(height: 6),

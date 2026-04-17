@@ -42,6 +42,8 @@ class ImageAnalysisSuggestion(BaseModel):
     confidence_score: float
     confidence_label: str
     rationale: str
+    used_user_context: bool = False
+    context_summary: Optional[str] = None
 
 
 class ImageAnalysisResponse(BaseModel):
@@ -61,6 +63,7 @@ class EstimateRequest(BaseModel):
     known_container: Optional[KnownContainerInput] = None
     manual_dimensions: Optional[ManualDimensionsInput] = None
     image_assisted: Optional[ImageAssistedInput] = None
+    content_description: Optional[str] = Field(default=None, max_length=300)
     notes: Optional[str] = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
@@ -106,6 +109,7 @@ class EstimationRecord(BaseModel):
     upper_bound_kg: float
     confidence_level: str
     created_at: datetime
+    content_description: Optional[str] = None
     notes: Optional[str] = None
 
 

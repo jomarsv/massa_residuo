@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import unicodedata
 
 from app.models.enums import VolumeMethod, WasteType
 from app.schemas.estimation import (
@@ -12,6 +13,75 @@ from app.schemas.estimation import (
 
 class ComputerVisionSupportService:
     """Servico inicial para futura integracao de classificacao e segmentacao."""
+
+    KEYWORDS_BY_WASTE_TYPE = {
+        WasteType.PLASTIC: (
+            "plastico",
+            "plastico",
+            "plastica",
+            "pet",
+            "embalagem",
+            "embalagens",
+            "garrafa",
+            "garrafas",
+            "sacola",
+            "sacolas",
+        ),
+        WasteType.PAPER: (
+            "papel",
+            "papeis",
+            "papelao",
+            "caixa",
+            "caixas",
+            "jornal",
+            "revista",
+            "folheto",
+        ),
+        WasteType.ORGANIC: (
+            "organico",
+            "organica",
+            "poda",
+            "podas",
+            "folha",
+            "folhas",
+            "galho",
+            "galhos",
+            "grama",
+            "resto",
+            "restos",
+            "comida",
+            "alimento",
+            "cascas",
+            "jardim",
+        ),
+        WasteType.RUBBLE: (
+            "entulho",
+            "obra",
+            "cimento",
+            "concreto",
+            "tijolo",
+            "tijolos",
+            "bloco",
+            "blocos",
+            "ceramica",
+            "azulejo",
+            "areia",
+            "brita",
+        ),
+        WasteType.METAL: (
+            "metal",
+            "metais",
+            "lata",
+            "latas",
+            "aluminio",
+            "ferro",
+            "aco",
+            "sucata",
+            "cobre",
+            "fio",
+            "fios",
+        ),
+    }
 
     def analyze_image(self, payload: ImageAssistedInput | None) -> dict:
         image_path = payload.image_path if payload else None
@@ -30,6 +100,7 @@ class ComputerVisionSupportService:
         filename: str,
         content_type: str | None,
         file_bytes: bytes,
+        content_description: str | None = None,
     ) -> ImageAnalysisResponse:
         image_array = np.frombuffer(file_bytes, dtype=np.uint8)
         image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
@@ -51,6 +122,7 @@ class ComputerVisionSupportService:
             mean_saturation=mean_saturation,
             mean_brightness=mean_brightness,
             edge_density=edge_density,
+            content_description=content_description,
         )
 
         return ImageAnalysisResponse(
@@ -78,7 +150,59 @@ class ComputerVisionSupportService:
         mean_saturation: float,
         mean_brightness: float,
         edge_density: float,
+        content_description: str | None,
     ) -> ImageAnalysisSuggestion:
+        visual_suggestion, visual_confidence, visual_rationale = self._build_visual_suggestion(
+            mean_hue=mean_hue,
+            mean_saturation=mean_saturation,
+            mean_brightness=mean_brightness,
+            edge_density=edge_density,
+        )
+        text_signal = self._build_text_signal(content_description)
+
+        suggested_waste_type = visual_suggestion
+        confidence_score = visual_confidence
+        rationale = visual_rationale
+        used_user_context = False
+        context_summary = None
+
+        if text_signal is not None:
+            suggested_waste_type = text_signal["waste_type"]
+            confidence_score = text_signal["confidence_score"]
+            used_user_context = True
+            context_summary = text_signal["context_summary"]
+
+            if visual_suggestion == suggested_waste_type:
+                confidence_score = min(0.78, confidence_score + 0.06)
+                rationale = (
+                    f"{text_signal['rationale']} A leitura visual permaneceu compativel com "
+                    "essa informacao, mas a classificacao continua assistiva."
+                )
+            else:
+                rationale = (
+                    f"{text_signal['rationale']} A imagem foi mantida apenas como apoio, "
+                    "porque o conteudo descrito pelo usuario tem prioridade nesta fase."
+                )
+
+        confidence_label = self._confidence_label(confidence_score)
+        return ImageAnalysisSuggestion(
+            suggested_waste_type=suggested_waste_type,
+            suggested_volume_method=VolumeMethod.IMAGE_ASSISTED,
+            confidence_score=round(confidence_score, 2),
+            confidence_label=confidence_label,
+            rationale=rationale,
+            used_user_context=used_user_context,
+            context_summary=context_summary,
+        )
+
+    def _build_visual_suggestion(
+        self,
+        *,
+        mean_hue: float,
+        mean_saturation: float,
+        mean_brightness: float,
+        edge_density: float,
+    ) -> tuple[WasteType | None, float, str]:
         suggested_waste_type: WasteType | None = None
         confidence_score = 0.22
         rationale = (
@@ -122,14 +246,61 @@ class ComputerVisionSupportService:
                 "metalicos, mas a confianca continua baixa."
             )
 
-        confidence_label = self._confidence_label(confidence_score)
-        return ImageAnalysisSuggestion(
-            suggested_waste_type=suggested_waste_type,
-            suggested_volume_method=VolumeMethod.IMAGE_ASSISTED,
-            confidence_score=round(confidence_score, 2),
-            confidence_label=confidence_label,
-            rationale=rationale,
-        )
+        return suggested_waste_type, confidence_score, rationale
+
+    def _build_text_signal(self, content_description: str | None) -> dict | None:
+        if not content_description:
+            return None
+
+        normalized = self._normalize_text(content_description)
+        if not normalized:
+            return None
+
+        scores: dict[WasteType, int] = {}
+        matches_by_type: dict[WasteType, list[str]] = {}
+        for waste_type, keywords in self.KEYWORDS_BY_WASTE_TYPE.items():
+            matches = [keyword for keyword in keywords if keyword in normalized]
+            if matches:
+                scores[waste_type] = len(matches)
+                matches_by_type[waste_type] = matches
+
+        if not scores:
+            return None
+
+        ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        top_type, top_score = ranked[0]
+        second_score = ranked[1][1] if len(ranked) > 1 else 0
+        top_matches = matches_by_type[top_type][:3]
+        joined_matches = ", ".join(top_matches)
+
+        if top_score == second_score and second_score > 0:
+            return {
+                "waste_type": top_type,
+                "confidence_score": 0.49,
+                "context_summary": f"Descricao ambigua com termos como {joined_matches}.",
+                "rationale": (
+                    "A descricao textual trouxe sinais de mais de um tipo de residuo. "
+                    f"Os termos mais fortes apontam para {top_type.value}, mas a confirmacao "
+                    "manual continua necessaria."
+                ),
+            }
+
+        confidence_score = 0.58 if top_score == 1 else 0.68
+        return {
+            "waste_type": top_type,
+            "confidence_score": confidence_score,
+            "context_summary": f"Descricao do usuario menciona: {joined_matches}.",
+            "rationale": (
+                f"A descricao do usuario menciona {joined_matches}, o que torna mais "
+                f"plausivel classificar o conteudo como {top_type.value}."
+            ),
+        }
+
+    @staticmethod
+    def _normalize_text(value: str) -> str:
+        normalized = unicodedata.normalize("NFD", value)
+        without_accents = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+        return without_accents.lower()
 
     @staticmethod
     def _confidence_label(score: float) -> str:

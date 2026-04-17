@@ -91,7 +91,10 @@ class BackendService {
         .toList();
   }
 
-  Future<ImageAnalysisResponse> analyzeImage(PlatformFile file) async {
+  Future<ImageAnalysisResponse> analyzeImage(
+    PlatformFile file, {
+    String? contentDescription,
+  }) async {
     final preparedImage = _prepareImageForUpload(
       bytes: file.bytes,
       originalName: file.name,
@@ -113,6 +116,10 @@ class BackendService {
         contentType: preparedImage.mediaType,
       ),
     );
+    final trimmedDescription = contentDescription?.trim();
+    if (trimmedDescription != null && trimmedDescription.isNotEmpty) {
+      request.fields['content_description'] = trimmedDescription;
+    }
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
