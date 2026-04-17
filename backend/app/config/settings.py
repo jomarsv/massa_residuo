@@ -23,6 +23,7 @@ ALLOWED_CORS_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
 ]
+ALLOWED_CORS_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?vercel\.app$"
 
 APP_TITLE = "Residuos Massa Estimada API"
 APP_VERSION = "0.1.0"

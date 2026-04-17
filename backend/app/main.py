@@ -8,6 +8,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.reference_data import router as reference_data_router
 from app.config.settings import (
     ALLOWED_CORS_ORIGINS,
+    ALLOWED_CORS_ORIGIN_REGEX,
     API_PREFIX,
     APP_TITLE,
     APP_VERSION,
@@ -36,6 +37,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_CORS_ORIGINS,
+    allow_origin_regex=ALLOWED_CORS_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
