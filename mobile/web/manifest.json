@@ -1,11 +1,11 @@
 {
-    "name": "residuos_massa_estimada",
-    "short_name": "residuos_massa_estimada",
+    "name": "MassaR",
+    "short_name": "MassaR",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Estimativa de massa de residuos com imagem, volume assistido e calibracao.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

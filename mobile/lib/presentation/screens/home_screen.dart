@@ -512,13 +512,41 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
               children: [
-                Text(
-                  'Estimativa de massa de residuos',
-                  style: theme.textTheme.headlineMedium,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      padding: const EdgeInsets.all(10),
+                      child: Image.asset(
+                        'assets/images/massar_logo.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('MassaR', style: theme.textTheme.headlineMedium),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Estimativa de Massa de Residuos',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Fase 3.5: descricao textual do conteudo, analise assistida por imagem e preenchimento hibrido antes do calculo.',
+                  'Fase 4.2: volume assistido por regua, calibracao com peso real e analise hibrida antes do calculo.',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 18),

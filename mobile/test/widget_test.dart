@@ -68,8 +68,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Estimativa de massa de residuos'), findsOneWidget);
-    expect(find.textContaining('Fase 3.5'), findsOneWidget);
+    expect(find.text('MassaR'), findsOneWidget);
+    expect(find.text('Estimativa de Massa de Residuos'), findsOneWidget);
+    expect(find.textContaining('Fase 4.2'), findsOneWidget);
     expect(find.text('Analise assistida por imagem'), findsOneWidget);
     expect(
       find.text('O que ha no resíduo ou dentro dos sacos?'),

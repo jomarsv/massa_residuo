@@ -7,10 +7,13 @@ import 'services/backend_service.dart';
 class WasteMassEstimatorApp extends StatelessWidget {
   const WasteMassEstimatorApp({super.key});
 
+  static const appTitle = 'MassaR';
+  static const appSubtitle = 'Estimativa de Massa de Residuos';
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Residuos Massa Estimada',
+      title: appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: HomeScreen(backendService: BackendService()),
