@@ -85,3 +85,27 @@ def test_estimate_with_image_assisted_precomputed_volume():
 
     assert result.estimated_volume_m3 == 1.4
     assert result.estimated_mass_kg == 588.0
+
+
+def test_estimate_applies_calibration_multiplier():
+    service = EstimationService()
+    payload = EstimateRequest(
+        waste_type=WasteType.ORGANIC,
+        volume_method=VolumeMethod.IMAGE_ASSISTED,
+        moisture_condition=MoistureCondition.DRY,
+        compaction_condition=CompactionCondition.LOOSE,
+        heterogeneity_condition=HeterogeneityCondition.HOMOGENEOUS,
+        image_assisted=ImageAssistedInput(
+            estimated_volume_m3=1.0,
+            estimated_length_m=1.5,
+            estimated_height_m=0.8,
+            estimated_depth_m=1.0,
+            confidence_score=0.62,
+        ),
+    )
+
+    result = service.estimate(payload, calibration_multiplier=1.25)
+
+    assert result.estimated_volume_m3 == 1.25
+    assert result.calibration_multiplier == 1.25
+    assert result.estimated_mass_kg == 525.0

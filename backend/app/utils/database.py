@@ -40,4 +40,16 @@ def init_db() -> None:
             connection.execute(
                 "ALTER TABLE estimation_history ADD COLUMN content_description TEXT"
             )
+        if "actual_mass_kg" not in existing_columns:
+            connection.execute(
+                "ALTER TABLE estimation_history ADD COLUMN actual_mass_kg REAL"
+            )
+        if "calibration_notes" not in existing_columns:
+            connection.execute(
+                "ALTER TABLE estimation_history ADD COLUMN calibration_notes TEXT"
+            )
+        if "calibrated_at" not in existing_columns:
+            connection.execute(
+                "ALTER TABLE estimation_history ADD COLUMN calibrated_at TEXT"
+            )
         connection.commit()

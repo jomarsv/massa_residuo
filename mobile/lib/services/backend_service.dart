@@ -93,6 +93,26 @@ class BackendService {
         .toList();
   }
 
+  Future<EstimationRecord> calibrateEstimate({
+    required String recordId,
+    required double actualMassKg,
+    String? notes,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/estimates/history/$recordId/calibrate'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'actual_mass_kg': actualMassKg, 'notes': notes}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorMessage(response.body));
+    }
+
+    return EstimationRecord.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   Future<ImageAnalysisResponse> analyzeImage(
     PlatformFile file, {
     String? contentDescription,

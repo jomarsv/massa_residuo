@@ -2,6 +2,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.repositories.history_repository import HistoryRepository
 from app.schemas.estimation import (
+    CalibrationRequest,
     EstimateRequest,
     EstimateResponse,
     EstimationRecord,
@@ -21,7 +22,14 @@ cv_support_service = ComputerVisionSupportService()
 @router.post("", response_model=EstimateResponse, status_code=status.HTTP_201_CREATED)
 def create_estimate(payload: EstimateRequest) -> EstimateResponse:
     try:
-        result = estimation_service.estimate(payload)
+        calibration_multiplier = history_repository.get_calibration_multiplier(
+            payload.waste_type.value,
+            payload.volume_method.value,
+        )
+        result = estimation_service.estimate(
+            payload,
+            calibration_multiplier=calibration_multiplier,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     stored_record = history_repository.save_estimation(payload, result)
@@ -108,6 +116,19 @@ def list_history() -> list[EstimationRecord]:
 def get_history_item(record_id: str) -> EstimationRecord:
     try:
         record = history_repository.get_by_id(record_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return EstimationRecord.model_validate(record)
+
+
+@router.post("/history/{record_id}/calibrate", response_model=EstimationRecord)
+def calibrate_history_item(record_id: str, payload: CalibrationRequest) -> EstimationRecord:
+    try:
+        record = history_repository.save_calibration(
+            record_id=record_id,
+            actual_mass_kg=payload.actual_mass_kg,
+            notes=payload.notes,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return EstimationRecord.model_validate(record)

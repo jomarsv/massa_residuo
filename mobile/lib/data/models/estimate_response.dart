@@ -27,6 +27,7 @@ class EstimateResultModel {
     required this.estimatedVolumeM3,
     required this.densityKgM3,
     required this.appliedFactors,
+    required this.calibrationMultiplier,
     required this.estimatedMassKg,
     required this.lowerBoundKg,
     required this.upperBoundKg,
@@ -39,6 +40,7 @@ class EstimateResultModel {
   final double estimatedVolumeM3;
   final double densityKgM3;
   final AppliedFactorsModel appliedFactors;
+  final double calibrationMultiplier;
   final double estimatedMassKg;
   final double lowerBoundKg;
   final double upperBoundKg;
@@ -54,6 +56,8 @@ class EstimateResultModel {
       appliedFactors: AppliedFactorsModel.fromJson(
         json['applied_factors'] as Map<String, dynamic>,
       ),
+      calibrationMultiplier:
+          (json['calibration_multiplier'] as num?)?.toDouble() ?? 1.0,
       estimatedMassKg: (json['estimated_mass_kg'] as num).toDouble(),
       lowerBoundKg: (json['lower_bound_kg'] as num).toDouble(),
       upperBoundKg: (json['upper_bound_kg'] as num).toDouble(),

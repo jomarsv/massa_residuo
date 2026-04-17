@@ -15,8 +15,8 @@ class EstimationService:
     def __init__(self) -> None:
         self.cv_support_service = ComputerVisionSupportService()
 
-    def estimate(self, payload: EstimateRequest) -> EstimateResult:
-        estimated_volume = self._estimate_volume(payload)
+    def estimate(self, payload: EstimateRequest, calibration_multiplier: float = 1.0) -> EstimateResult:
+        estimated_volume = self._estimate_volume(payload) * calibration_multiplier
         density = WASTE_DENSITIES_KG_M3[payload.waste_type]
         moisture_factor = MOISTURE_FACTORS[payload.moisture_condition]
         compaction_factor = COMPACTION_FACTORS[payload.compaction_condition]
@@ -37,13 +37,15 @@ class EstimationService:
                 compaction_factor=compaction_factor,
                 heterogeneity_factor=heterogeneity_factor,
             ),
+            calibration_multiplier=round(calibration_multiplier, 3),
             estimated_mass_kg=round(estimated_mass, 2),
             lower_bound_kg=round(lower_bound, 2),
             upper_bound_kg=round(upper_bound, 2),
             confidence_level=CONFIDENCE_LABEL_BY_METHOD[payload.volume_method.value],
             disclaimer=(
                 "Este resultado e uma estimativa tecnica baseada em volume aparente, "
-                "densidade aparente e fatores configuraveis. Nao substitui pesagem real."
+                "densidade aparente, fatores configuraveis e calibracao historica quando disponivel. "
+                "Nao substitui pesagem real."
             ),
         )
 

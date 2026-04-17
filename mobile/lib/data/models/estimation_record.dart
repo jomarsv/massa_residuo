@@ -11,6 +11,9 @@ class EstimationRecord {
     required this.confidenceLevel,
     required this.createdAt,
     this.contentDescription,
+    this.actualMassKg,
+    this.calibrationNotes,
+    this.calibratedAt,
     this.notes,
   });
 
@@ -25,6 +28,9 @@ class EstimationRecord {
   final String confidenceLevel;
   final DateTime createdAt;
   final String? contentDescription;
+  final double? actualMassKg;
+  final String? calibrationNotes;
+  final DateTime? calibratedAt;
   final String? notes;
 
   factory EstimationRecord.fromJson(Map<String, dynamic> json) {
@@ -40,6 +46,11 @@ class EstimationRecord {
       confidenceLevel: json['confidence_level'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
       contentDescription: json['content_description'] as String?,
+      actualMassKg: (json['actual_mass_kg'] as num?)?.toDouble(),
+      calibrationNotes: json['calibration_notes'] as String?,
+      calibratedAt: json['calibrated_at'] == null
+          ? null
+          : DateTime.parse(json['calibrated_at'] as String),
       notes: json['notes'] as String?,
     );
   }

@@ -41,6 +41,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final _imagePathController = TextEditingController();
   final _contentDescriptionController = TextEditingController();
   final _notesController = TextEditingController();
+  final _actualMassController = TextEditingController();
+  final _calibrationNotesController = TextEditingController();
   final _cameraCaptureService = buildCameraCaptureService();
 
   late Future<AppStatus> _statusFuture;
@@ -61,9 +63,12 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSubmitting = false;
   bool _isAnalyzingImage = false;
   bool _isEstimatingVolume = false;
+  bool _isSavingCalibration = false;
   String? _submissionError;
   String? _imageAnalysisError;
   String? _volumeEstimationError;
+  String? _calibrationError;
+  String? _calibrationSuccess;
   EstimateResponseModel? _latestEstimate;
   ImageAnalysisResponse? _latestImageAnalysis;
   ImageVolumeEstimateResponse? _latestVolumeEstimate;
@@ -94,6 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _imagePathController.dispose();
     _contentDescriptionController.dispose();
     _notesController.dispose();
+    _actualMassController.dispose();
+    _calibrationNotesController.dispose();
     super.dispose();
   }
 
@@ -332,6 +339,10 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _latestEstimate = response;
         _historyFuture = widget.backendService.fetchHistory();
+        _actualMassController.clear();
+        _calibrationNotesController.clear();
+        _calibrationError = null;
+        _calibrationSuccess = null;
       });
     } catch (error) {
       if (!mounted) {
@@ -344,6 +355,65 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveCalibration() async {
+    final latestEstimate = _latestEstimate;
+    if (latestEstimate == null) {
+      return;
+    }
+
+    final actualMass = double.tryParse(
+      _actualMassController.text.trim().replaceAll(',', '.'),
+    );
+    if (actualMass == null || actualMass <= 0) {
+      setState(() {
+        _calibrationError = 'Informe um peso real valido em kg.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSavingCalibration = true;
+      _calibrationError = null;
+      _calibrationSuccess = null;
+    });
+
+    try {
+      final updatedRecord = await widget.backendService.calibrateEstimate(
+        recordId: latestEstimate.record.id,
+        actualMassKg: actualMass,
+        notes: _calibrationNotesController.text.trim().isEmpty
+            ? null
+            : _calibrationNotesController.text.trim(),
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _latestEstimate = EstimateResponseModel(
+          result: latestEstimate.result,
+          record: updatedRecord,
+        );
+        _historyFuture = widget.backendService.fetchHistory();
+        _calibrationSuccess =
+            'Peso real salvo. As proximas estimativas por imagem podem usar essa calibracao.';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _calibrationError = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingCalibration = false;
         });
       }
     }
@@ -1104,6 +1174,11 @@ class _HomeScreenState extends State<HomeScreen> {
               'Fatores aplicados: umidade ${result.appliedFactors.moistureFactor.toStringAsFixed(2)}, compactacao ${result.appliedFactors.compactionFactor.toStringAsFixed(2)}, mistura ${result.appliedFactors.heterogeneityFactor.toStringAsFixed(2)}.',
               style: theme.textTheme.bodyMedium,
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Multiplicador de calibracao historica: ${result.calibrationMultiplier.toStringAsFixed(3)}',
+              style: theme.textTheme.bodyMedium,
+            ),
             if (estimate.record.contentDescription != null &&
                 estimate.record.contentDescription!.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -1112,6 +1187,86 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: theme.textTheme.bodyMedium,
               ),
             ],
+            const SizedBox(height: 16),
+            Text('Calibrar com peso real', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              'Informe o peso medido em balanca para refinar futuras estimativas por imagem do mesmo tipo de residuo.',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                SizedBox(
+                  width: 220,
+                  child: TextFormField(
+                    controller: _actualMassController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Peso real (kg)',
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 340,
+                  child: TextFormField(
+                    controller: _calibrationNotesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Observacoes da calibracao',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (estimate.record.actualMassKg != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Peso real salvo: ${estimate.record.actualMassKg!.toStringAsFixed(2)} kg',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            if (_calibrationError != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _calibrationError!,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF9E2A2B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            if (_calibrationSuccess != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _calibrationSuccess!,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF236B3A),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: _isSavingCalibration ? null : _saveCalibration,
+              icon: _isSavingCalibration
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.scale_outlined),
+              label: Text(
+                _isSavingCalibration
+                    ? 'Salvando calibracao...'
+                    : 'Salvar peso real',
+              ),
+            ),
           ],
         ),
       ),
@@ -1213,6 +1368,23 @@ class _HomeScreenState extends State<HomeScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 'Conteudo informado: ${record.contentDescription!}',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ],
+                            if (record.actualMassKg != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Peso real: ${record.actualMassKg!.toStringAsFixed(2)} kg',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                            if (record.calibrationNotes != null &&
+                                record.calibrationNotes!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Notas da calibracao: ${record.calibrationNotes!}',
                                 style: theme.textTheme.bodyMedium,
                               ),
                             ],

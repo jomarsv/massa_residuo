@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from statistics import median
 
 from app.config.settings import use_firebase_persistence
 from app.schemas.estimation import EstimateRequest, EstimateResult
@@ -23,6 +24,9 @@ class HistoryRepository:
             "confidence_level": result.confidence_level,
             "content_description": request.content_description,
             "notes": request.notes,
+            "actual_mass_kg": None,
+            "calibration_notes": None,
+            "calibrated_at": None,
             "created_at": created_at,
         }
 
@@ -51,8 +55,11 @@ class HistoryRepository:
                     confidence_level,
                     content_description,
                     notes,
+                    actual_mass_kg,
+                    calibration_notes,
+                    calibrated_at,
                     created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 tuple(payload.values()),
             )
@@ -88,6 +95,9 @@ class HistoryRepository:
                     confidence_level,
                     content_description,
                     notes,
+                    actual_mass_kg,
+                    calibration_notes,
+                    calibrated_at,
                     created_at
                 FROM estimation_history
                 ORDER BY datetime(created_at) DESC, id DESC
@@ -95,7 +105,7 @@ class HistoryRepository:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def get_by_id(self, record_id: int) -> dict:
+    def get_by_id(self, record_id: str | int) -> dict:
         if use_firebase_persistence():
             collection = get_firestore_collection()
             if collection is None:
@@ -120,6 +130,9 @@ class HistoryRepository:
                     confidence_level,
                     content_description,
                     notes,
+                    actual_mass_kg,
+                    calibration_notes,
+                    calibrated_at,
                     created_at
                 FROM estimation_history
                 WHERE id = ?
@@ -129,6 +142,65 @@ class HistoryRepository:
         if row is None:
             raise ValueError(f"Registro {record_id} nao encontrado.")
         return dict(row)
+
+    def save_calibration(self, record_id: str | int, actual_mass_kg: float, notes: str | None) -> dict:
+        calibrated_at = datetime.now(timezone.utc).isoformat()
+
+        if use_firebase_persistence():
+            collection = get_firestore_collection()
+            if collection is None:
+                raise ValueError(f"Registro {record_id} nao encontrado.")
+            document = collection.document(str(record_id))
+            snapshot = document.get()
+            if not snapshot.exists:
+                raise ValueError(f"Registro {record_id} nao encontrado.")
+            document.update(
+                {
+                    "actual_mass_kg": actual_mass_kg,
+                    "calibration_notes": notes,
+                    "calibrated_at": calibrated_at,
+                }
+            )
+            return self.get_by_id(record_id)
+
+        with get_connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE estimation_history
+                SET actual_mass_kg = ?, calibration_notes = ?, calibrated_at = ?
+                WHERE id = ?
+                """,
+                (actual_mass_kg, notes, calibrated_at, record_id),
+            )
+            connection.commit()
+            if cursor.rowcount == 0:
+                raise ValueError(f"Registro {record_id} nao encontrado.")
+        return self.get_by_id(record_id)
+
+    def get_calibration_multiplier(self, waste_type: str, volume_method: str) -> float:
+        records = [
+            record
+            for record in self.list_estimations()
+            if record["waste_type"] == waste_type
+            and record["volume_method"] == volume_method
+            and record.get("actual_mass_kg") is not None
+            and record.get("estimated_mass_kg")
+        ]
+        if not records:
+            return 1.0
+
+        multipliers = []
+        for record in records:
+            estimated_mass = float(record["estimated_mass_kg"])
+            actual_mass = float(record["actual_mass_kg"])
+            if estimated_mass <= 0:
+                continue
+            ratio = actual_mass / estimated_mass
+            multipliers.append(min(max(ratio, 0.35), 2.5))
+
+        if not multipliers:
+            return 1.0
+        return round(float(median(multipliers)), 3)
 
     @staticmethod
     def _normalize_firestore_document(document) -> dict:
@@ -145,5 +217,8 @@ class HistoryRepository:
             "confidence_level": data["confidence_level"],
             "content_description": data.get("content_description"),
             "notes": data.get("notes"),
+            "actual_mass_kg": data.get("actual_mass_kg"),
+            "calibration_notes": data.get("calibration_notes"),
+            "calibrated_at": data.get("calibrated_at"),
             "created_at": data["created_at"],
         }

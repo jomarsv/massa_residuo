@@ -121,6 +121,7 @@ class EstimateResult(BaseModel):
     estimated_volume_m3: float
     density_kg_m3: float
     applied_factors: AppliedFactors
+    calibration_multiplier: float = 1.0
     estimated_mass_kg: float
     lower_bound_kg: float
     upper_bound_kg: float
@@ -142,12 +143,20 @@ class EstimationRecord(BaseModel):
     confidence_level: str
     created_at: datetime
     content_description: Optional[str] = None
+    actual_mass_kg: Optional[float] = None
+    calibration_notes: Optional[str] = None
+    calibrated_at: Optional[datetime] = None
     notes: Optional[str] = None
 
 
 class EstimateResponse(BaseModel):
     result: EstimateResult
     record: EstimationRecord
+
+
+class CalibrationRequest(BaseModel):
+    actual_mass_kg: float = Field(..., gt=0)
+    notes: Optional[str] = Field(default=None, max_length=500)
 
 
 class ReferenceDataResponse(BaseModel):
