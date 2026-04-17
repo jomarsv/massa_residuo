@@ -76,5 +76,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Selecionar imagem'), findsOneWidget);
+    expect(find.text('Usar camera'), findsOneWidget);
   });
 }

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../data/models/estimate_response.dart';
 import '../../data/models/estimation_record.dart';
@@ -36,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _imagePathController = TextEditingController();
   final _contentDescriptionController = TextEditingController();
   final _notesController = TextEditingController();
+  final _imagePicker = ImagePicker();
 
   late Future<AppStatus> _statusFuture;
   late Future<List<EstimationRecord>> _historyFuture;
@@ -98,10 +100,55 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final file = result.files.first;
+    _setSelectedImage(file: file, bytes: file.bytes, fileName: file.name);
+  }
+
+  Future<void> _captureImage() async {
+    try {
+      final captured = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+      );
+
+      if (captured == null) {
+        return;
+      }
+
+      final bytes = await captured.readAsBytes();
+      final fileName = captured.name.isNotEmpty
+          ? captured.name
+          : 'captura-camera.jpg';
+
+      _setSelectedImage(
+        file: PlatformFile(
+          name: fileName,
+          size: bytes.lengthInBytes,
+          bytes: bytes,
+          path: captured.path,
+        ),
+        bytes: bytes,
+        fileName: fileName,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _imageAnalysisError =
+            'Nao foi possivel acessar a camera neste dispositivo ou navegador.';
+      });
+    }
+  }
+
+  void _setSelectedImage({
+    required PlatformFile file,
+    required Uint8List? bytes,
+    required String fileName,
+  }) {
     setState(() {
       _selectedImageFile = file;
-      _selectedImageBytes = file.bytes;
-      _imagePathController.text = file.name;
+      _selectedImageBytes = bytes;
+      _imagePathController.text = fileName;
       _imageAnalysisError = null;
     });
   }
@@ -391,6 +438,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: _pickImage,
                   icon: const Icon(Icons.upload_file_outlined),
                   label: const Text('Selecionar imagem'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _captureImage,
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: const Text('Usar camera'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _isAnalyzingImage ? null : _analyzeSelectedImage,
