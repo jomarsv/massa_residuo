@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../data/models/estimate_response.dart';
+import '../data/models/estimation_record.dart';
 import '../domain/entities/app_status.dart';
 
 class BackendService {
@@ -48,5 +50,48 @@ class BackendService {
         message: 'Backend indisponivel. O app segue em modo estrutural local.',
       );
     }
+  }
+
+  Future<EstimateResponseModel> createEstimate(
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/estimates'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode != 201) {
+      throw Exception(_extractErrorMessage(response.body));
+    }
+
+    return EstimateResponseModel.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<List<EstimationRecord>> fetchHistory() async {
+    final response = await _client.get(Uri.parse('$baseUrl/estimates/history'));
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorMessage(response.body));
+    }
+
+    final payload = jsonDecode(response.body) as List<dynamic>;
+    return payload
+        .map((item) => EstimationRecord.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  String _extractErrorMessage(String body) {
+    try {
+      final payload = jsonDecode(body);
+      if (payload is Map<String, dynamic> && payload['detail'] != null) {
+        return payload['detail'].toString();
+      }
+    } catch (_) {
+      // Ignore parse failures and use fallback message below.
+    }
+    return 'Nao foi possivel concluir a operacao com o backend.';
   }
 }
