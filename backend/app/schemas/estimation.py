@@ -26,6 +26,38 @@ class ManualDimensionsInput(BaseModel):
 class ImageAssistedInput(BaseModel):
     image_path: Optional[str] = Field(default=None, description="Caminho local ou URI da imagem.")
     notes: Optional[str] = Field(default=None, max_length=500)
+    estimated_volume_m3: Optional[float] = Field(default=None, gt=0)
+    estimated_length_m: Optional[float] = Field(default=None, gt=0)
+    estimated_height_m: Optional[float] = Field(default=None, gt=0)
+    estimated_depth_m: Optional[float] = Field(default=None, gt=0)
+    confidence_score: Optional[float] = Field(default=None, ge=0, le=1)
+
+
+class RulerPoint(BaseModel):
+    x: float = Field(..., ge=0, le=1)
+    y: float = Field(..., ge=0, le=1)
+
+
+class ImageVolumeEstimateMetrics(BaseModel):
+    width_px: int
+    height_px: int
+    pixels_per_meter: float
+    foreground_area_px: int
+    coverage_ratio: float
+
+
+class ImageVolumeEstimateResponse(BaseModel):
+    filename: str
+    content_type: Optional[str] = None
+    estimated_volume_m3: float
+    estimated_length_m: float
+    estimated_height_m: float
+    estimated_depth_m: float
+    confidence_score: float
+    confidence_label: str
+    rationale: str
+    metrics: ImageVolumeEstimateMetrics
+    disclaimer: str
 
 
 class ImageAnalysisMetrics(BaseModel):

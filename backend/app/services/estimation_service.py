@@ -58,8 +58,12 @@ class EstimationService:
             assert dimensions is not None
             return dimensions.length_m * dimensions.width_m * dimensions.height_m
 
+        image_assisted = payload.image_assisted
+        if image_assisted and image_assisted.estimated_volume_m3:
+            return image_assisted.estimated_volume_m3
+
         self.cv_support_service.analyze_image(payload.image_assisted)
         raise ValueError(
-            "A estimativa assistida por imagem ainda nao calcula volume automaticamente. "
-            "Use recipiente conhecido ou dimensoes manuais para obter a massa estimada."
+            "A estimativa assistida por imagem exige calibracao previa com a regua visivel. "
+            "Marque os 2 pontos de 1 metro e gere o volume antes de calcular a massa."
         )

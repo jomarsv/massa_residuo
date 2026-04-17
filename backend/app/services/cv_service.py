@@ -8,6 +8,8 @@ from app.schemas.estimation import (
     ImageAnalysisResponse,
     ImageAnalysisSuggestion,
     ImageAssistedInput,
+    ImageVolumeEstimateMetrics,
+    ImageVolumeEstimateResponse,
 )
 
 
@@ -140,6 +142,107 @@ class ComputerVisionSupportService:
                 "A analise por imagem e apenas assistiva. O sistema usa heuristicas "
                 "visuais simples para sugerir preenchimento do formulario, sem prometer "
                 "classificacao ou estimativa de massa automatica."
+            ),
+        )
+
+    def estimate_volume_from_ruler(
+        self,
+        *,
+        filename: str,
+        content_type: str | None,
+        file_bytes: bytes,
+        ruler_point_a: tuple[float, float],
+        ruler_point_b: tuple[float, float],
+        reference_length_m: float = 1.0,
+    ) -> ImageVolumeEstimateResponse:
+        image_array = np.frombuffer(file_bytes, dtype=np.uint8)
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        if image is None:
+            raise ValueError("Nao foi possivel ler a imagem enviada.")
+        if reference_length_m <= 0:
+            raise ValueError("O comprimento de referencia da regua deve ser positivo.")
+
+        height, width = image.shape[:2]
+        point_a = np.array(
+            [ruler_point_a[0] * width, ruler_point_a[1] * height],
+            dtype=np.float32,
+        )
+        point_b = np.array(
+            [ruler_point_b[0] * width, ruler_point_b[1] * height],
+            dtype=np.float32,
+        )
+        ruler_length_px = float(np.linalg.norm(point_a - point_b))
+        if ruler_length_px < 40:
+            raise ValueError(
+                "Os pontos da regua estao muito proximos. Marque os extremos do trecho de 1 metro."
+            )
+
+        pixels_per_meter = ruler_length_px / reference_length_m
+        mask = self._segment_pile_mask(image)
+        foreground_area_px = int(np.count_nonzero(mask))
+        if foreground_area_px < max(1200, int(width * height * 0.01)):
+            raise ValueError(
+                "Nao foi possivel segmentar a pilha com confianca suficiente. "
+                "Tente outra imagem ou ajuste melhor os pontos da regua."
+            )
+
+        ys, xs = np.where(mask > 0)
+        min_x, max_x = int(xs.min()), int(xs.max())
+        min_y, max_y = int(ys.min()), int(ys.max())
+        bounding_width_px = max_x - min_x + 1
+        bounding_height_px = max_y - min_y + 1
+        coverage_ratio = foreground_area_px / float(bounding_width_px * bounding_height_px)
+        silhouette_area_m2 = foreground_area_px / (pixels_per_meter**2)
+
+        estimated_length_m = bounding_width_px / pixels_per_meter
+        estimated_height_m = (bounding_height_px / pixels_per_meter) * (
+            0.64 + 0.22 * min(max(coverage_ratio, 0.0), 1.0)
+        )
+        estimated_height_m = max(estimated_height_m, 0.25)
+
+        face_fill_factor = min(max(coverage_ratio, 0.35), 0.88)
+        estimated_depth_m = silhouette_area_m2 / max(estimated_height_m * face_fill_factor, 0.1)
+        estimated_depth_m = min(max(estimated_depth_m, 0.35), max(estimated_length_m * 0.95, 0.6))
+
+        shape_factor = min(max(0.56 + coverage_ratio * 0.18, 0.55), 0.78)
+        estimated_volume_m3 = estimated_length_m * estimated_height_m * estimated_depth_m * shape_factor
+
+        confidence_score = min(
+            0.78,
+            max(
+                0.42,
+                0.44
+                + min(ruler_length_px / 600.0, 0.12)
+                + min(coverage_ratio, 0.55) * 0.18,
+            ),
+        )
+        confidence_label = self._confidence_label(confidence_score)
+
+        return ImageVolumeEstimateResponse(
+            filename=filename,
+            content_type=content_type,
+            estimated_volume_m3=round(estimated_volume_m3, 3),
+            estimated_length_m=round(estimated_length_m, 2),
+            estimated_height_m=round(estimated_height_m, 2),
+            estimated_depth_m=round(estimated_depth_m, 2),
+            confidence_score=round(confidence_score, 2),
+            confidence_label=confidence_label,
+            rationale=(
+                "O volume foi estimado a partir da escala de 1 metro marcada na regua e "
+                "da silhueta aparente da pilha segmentada na imagem. A profundidade foi "
+                "inferida por fator geometrico, portanto a incerteza continua relevante."
+            ),
+            metrics=ImageVolumeEstimateMetrics(
+                width_px=width,
+                height_px=height,
+                pixels_per_meter=round(pixels_per_meter, 2),
+                foreground_area_px=foreground_area_px,
+                coverage_ratio=round(coverage_ratio, 3),
+            ),
+            disclaimer=(
+                "Esta estimativa de volume e semiautomatica e depende da marcacao correta "
+                "da regua, da segmentacao visual da pilha e de hipoteses geometricas "
+                "simplificadas. Nao substitui medicao fisica direta."
             ),
         )
 
@@ -301,6 +404,70 @@ class ComputerVisionSupportService:
         normalized = unicodedata.normalize("NFD", value)
         without_accents = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
         return without_accents.lower()
+
+    def _segment_pile_mask(self, image: np.ndarray) -> np.ndarray:
+        height, width = image.shape[:2]
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        rect = (
+            int(width * 0.03),
+            int(height * 0.12),
+            max(1, int(width * 0.90)),
+            max(1, int(height * 0.80)),
+        )
+        grabcut_mask = np.zeros((height, width), np.uint8)
+        background_model = np.zeros((1, 65), np.float64)
+        foreground_model = np.zeros((1, 65), np.float64)
+
+        try:
+            cv2.grabCut(
+                image,
+                grabcut_mask,
+                rect,
+                background_model,
+                foreground_model,
+                3,
+                cv2.GC_INIT_WITH_RECT,
+            )
+            grabcut_foreground = np.where(
+                (grabcut_mask == cv2.GC_FGD) | (grabcut_mask == cv2.GC_PR_FGD),
+                255,
+                0,
+            ).astype("uint8")
+        except cv2.error:
+            grabcut_foreground = np.zeros((height, width), dtype="uint8")
+
+        dark_mask = cv2.inRange(gray, 0, 165)
+        low_saturation_dark = cv2.inRange(hsv, (0, 0, 0), (180, 140, 190))
+        edge_mask = cv2.Canny(gray, 70, 160)
+        edge_mask = cv2.dilate(edge_mask, np.ones((5, 5), np.uint8), iterations=1)
+
+        combined = cv2.bitwise_or(grabcut_foreground, dark_mask)
+        combined = cv2.bitwise_or(combined, low_saturation_dark)
+        combined = cv2.bitwise_and(
+            combined,
+            np.where(
+                np.indices((height, width))[0] > int(height * 0.16),
+                255,
+                0,
+            ).astype("uint8"),
+        )
+        combined = cv2.bitwise_or(combined, edge_mask)
+
+        kernel = np.ones((7, 7), np.uint8)
+        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel, iterations=2)
+        combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN, kernel, iterations=1)
+
+        contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        filtered_mask = np.zeros_like(combined)
+        min_area = max(1500, int(width * height * 0.002))
+        for contour in contours:
+            if cv2.contourArea(contour) >= min_area:
+                cv2.drawContours(filtered_mask, [contour], -1, 255, thickness=cv2.FILLED)
+
+        filtered_mask = cv2.morphologyEx(filtered_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+        return filtered_mask
 
     @staticmethod
     def _confidence_label(score: float) -> str:

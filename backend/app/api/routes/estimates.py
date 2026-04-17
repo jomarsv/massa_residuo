@@ -6,6 +6,7 @@ from app.schemas.estimation import (
     EstimateResponse,
     EstimationRecord,
     ImageAnalysisResponse,
+    ImageVolumeEstimateResponse,
 )
 from app.services.cv_service import ComputerVisionSupportService
 from app.services.estimation_service import EstimationService
@@ -51,6 +52,44 @@ async def analyze_image(
             content_type=file.content_type,
             file_bytes=file_bytes,
             content_description=content_description,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/estimate-volume", response_model=ImageVolumeEstimateResponse)
+async def estimate_volume_from_image(
+    file: UploadFile = File(...),
+    ruler_point_a_x: float = Form(...),
+    ruler_point_a_y: float = Form(...),
+    ruler_point_b_x: float = Form(...),
+    ruler_point_b_y: float = Form(...),
+    reference_length_m: float = Form(default=1.0),
+) -> ImageVolumeEstimateResponse:
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Envie um arquivo de imagem valido.",
+        )
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O arquivo enviado esta vazio.",
+        )
+
+    try:
+        return cv_support_service.estimate_volume_from_ruler(
+            filename=file.filename or "imagem-sem-nome",
+            content_type=file.content_type,
+            file_bytes=file_bytes,
+            ruler_point_a=(ruler_point_a_x, ruler_point_a_y),
+            ruler_point_b=(ruler_point_b_x, ruler_point_b_y),
+            reference_length_m=reference_length_m,
         )
     except ValueError as exc:
         raise HTTPException(

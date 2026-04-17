@@ -42,3 +42,26 @@ def test_analyze_uploaded_image_prioritizes_user_description():
     assert result.suggestion.used_user_context is True
     assert result.suggestion.context_summary is not None
     assert result.suggestion.confidence_score >= 0.58
+
+
+def test_estimate_volume_from_ruler_returns_positive_volume():
+    image = np.full((240, 320, 3), 235, dtype=np.uint8)
+    cv2.rectangle(image, (40, 70), (250, 210), (30, 30, 30), thickness=cv2.FILLED)
+    success, encoded = cv2.imencode(".jpg", image)
+    assert success
+
+    service = ComputerVisionSupportService()
+    result = service.estimate_volume_from_ruler(
+        filename="pile.jpg",
+        content_type="image/jpeg",
+        file_bytes=encoded.tobytes(),
+        ruler_point_a=(0.10, 0.20),
+        ruler_point_b=(0.50, 0.20),
+        reference_length_m=1.0,
+    )
+
+    assert result.estimated_volume_m3 > 0
+    assert result.estimated_length_m > 0
+    assert result.estimated_height_m > 0
+    assert result.estimated_depth_m > 0
+    assert result.metrics.pixels_per_meter > 0

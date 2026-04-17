@@ -11,6 +11,8 @@ import 'package:mime/mime.dart';
 import '../data/models/estimate_response.dart';
 import '../data/models/estimation_record.dart';
 import '../data/models/image_analysis.dart';
+import '../data/models/image_volume_estimate.dart';
+import '../data/models/normalized_point.dart';
 import '../domain/entities/app_status.dart';
 
 class BackendService {
@@ -129,6 +131,51 @@ class BackendService {
     }
 
     return ImageAnalysisResponse.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<ImageVolumeEstimateResponse> estimateImageVolume(
+    PlatformFile file, {
+    required NormalizedPoint rulerPointA,
+    required NormalizedPoint rulerPointB,
+    double referenceLengthM = 1.0,
+  }) async {
+    final preparedImage = _prepareImageForUpload(
+      bytes: file.bytes,
+      originalName: file.name,
+    );
+    final bytes = preparedImage.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('Nao foi possivel ler os bytes da imagem selecionada.');
+    }
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/estimates/estimate-volume'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: preparedImage.filename,
+        contentType: preparedImage.mediaType,
+      ),
+    );
+    request.fields['ruler_point_a_x'] = rulerPointA.x.toStringAsFixed(6);
+    request.fields['ruler_point_a_y'] = rulerPointA.y.toStringAsFixed(6);
+    request.fields['ruler_point_b_x'] = rulerPointB.x.toStringAsFixed(6);
+    request.fields['ruler_point_b_y'] = rulerPointB.y.toStringAsFixed(6);
+    request.fields['reference_length_m'] = referenceLengthM.toStringAsFixed(2);
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorMessage(response.body));
+    }
+
+    return ImageVolumeEstimateResponse.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }

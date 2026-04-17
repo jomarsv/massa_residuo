@@ -2,10 +2,13 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 
 import '../../data/models/estimate_response.dart';
 import '../../data/models/estimation_record.dart';
 import '../../data/models/image_analysis.dart';
+import '../../data/models/image_volume_estimate.dart';
+import '../../data/models/normalized_point.dart';
 import '../../data/models/option_item.dart';
 import '../../data/models/waste_option.dart';
 import '../../data/repositories/reference_data_repository.dart';
@@ -14,6 +17,7 @@ import '../../services/backend_service.dart';
 import '../../services/camera_capture_service.dart';
 import '../../widgets/analysis_metric_chip.dart';
 import '../../widgets/result_metric_tile.dart';
+import '../../widgets/ruler_point_selector.dart';
 import '../../widgets/status_badge.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -56,12 +60,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isSubmitting = false;
   bool _isAnalyzingImage = false;
+  bool _isEstimatingVolume = false;
   String? _submissionError;
   String? _imageAnalysisError;
+  String? _volumeEstimationError;
   EstimateResponseModel? _latestEstimate;
   ImageAnalysisResponse? _latestImageAnalysis;
+  ImageVolumeEstimateResponse? _latestVolumeEstimate;
   PlatformFile? _selectedImageFile;
   Uint8List? _selectedImageBytes;
+  double? _selectedImageAspectRatio;
+  List<NormalizedPoint> _rulerPoints = const [];
 
   @override
   void initState() {
@@ -143,6 +152,43 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedImageBytes = bytes;
       _imagePathController.text = fileName;
       _imageAnalysisError = null;
+      _volumeEstimationError = null;
+      _latestVolumeEstimate = null;
+      _rulerPoints = const [];
+      _selectedImageAspectRatio = _computeAspectRatio(bytes) ?? (4 / 3);
+    });
+  }
+
+  double? _computeAspectRatio(Uint8List? bytes) {
+    if (bytes == null || bytes.isEmpty) {
+      return null;
+    }
+
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null || decoded.height == 0) {
+      return null;
+    }
+
+    return decoded.width / decoded.height;
+  }
+
+  void _addRulerPoint(NormalizedPoint point) {
+    setState(() {
+      _volumeEstimationError = null;
+      _latestVolumeEstimate = null;
+      if (_rulerPoints.length >= 2) {
+        _rulerPoints = [point];
+      } else {
+        _rulerPoints = [..._rulerPoints, point];
+      }
+    });
+  }
+
+  void _clearRulerPoints() {
+    setState(() {
+      _rulerPoints = const [];
+      _latestVolumeEstimate = null;
+      _volumeEstimationError = null;
     });
   }
 
@@ -202,15 +248,70 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _estimateVolumeFromRuler() async {
+    final file = _selectedImageFile;
+    if (file == null || _rulerPoints.length != 2) {
+      setState(() {
+        _volumeEstimationError =
+            'Selecione uma imagem e marque os 2 pontos que representam 1 metro na regua.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isEstimatingVolume = true;
+      _volumeEstimationError = null;
+    });
+
+    try {
+      final estimate = await widget.backendService.estimateImageVolume(
+        file,
+        rulerPointA: _rulerPoints[0],
+        rulerPointB: _rulerPoints[1],
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _latestVolumeEstimate = estimate;
+        _selectedVolumeMethod = 'estimativa_assistida_imagem';
+        final currentNotes = _notesController.text.trim();
+        final volumeNote =
+            'Volume assistido por regua: ${estimate.estimatedVolumeM3.toStringAsFixed(3)} m3. ${estimate.rationale}';
+        _notesController.text = currentNotes.isEmpty
+            ? volumeNote
+            : '$currentNotes\n$volumeNote';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _volumeEstimationError = error
+            .toString()
+            .replaceFirst('Exception: ', '')
+            .replaceFirst('Bad state: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isEstimatingVolume = false;
+        });
+      }
+    }
+  }
+
   Future<void> _submitEstimate() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    if (_selectedVolumeMethod == 'estimativa_assistida_imagem') {
+    if (_selectedVolumeMethod == 'estimativa_assistida_imagem' &&
+        _latestVolumeEstimate == null) {
       setState(() {
         _submissionError =
-            'A imagem ajuda a classificar o residuo, mas ainda nao calcula volume. Escolha recipiente conhecido ou dimensoes manuais para estimar a massa.';
+            'A estimativa por imagem exige calibracao pela regua. Marque os 2 pontos de 1 metro e clique em estimar volume antes de calcular a massa.';
       });
       return;
     }
@@ -283,7 +384,13 @@ class _HomeScreenState extends State<HomeScreen> {
         'image_path': _imagePathController.text.trim().isEmpty
             ? null
             : _imagePathController.text.trim(),
+        'estimated_volume_m3': _latestVolumeEstimate?.estimatedVolumeM3,
+        'estimated_length_m': _latestVolumeEstimate?.estimatedLengthM,
+        'estimated_height_m': _latestVolumeEstimate?.estimatedHeightM,
+        'estimated_depth_m': _latestVolumeEstimate?.estimatedDepthM,
+        'confidence_score': _latestVolumeEstimate?.confidenceScore,
         'notes':
+            _latestVolumeEstimate?.rationale ??
             _latestImageAnalysis?.suggestion.rationale ??
             'Entrada assistida por imagem via MVP',
       };
@@ -410,7 +517,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Selecione uma imagem do residuo e descreva o conteudo observado. A descricao do usuario tem prioridade sobre a heuristica visual nesta fase.',
+              'Selecione uma imagem do residuo, descreva o conteudo observado e marque os 2 pontos da regua que representam 1 metro para estimar o volume aparente.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -453,6 +560,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     _isAnalyzingImage ? 'Analisando...' : 'Analisar imagem',
                   ),
                 ),
+                OutlinedButton.icon(
+                  onPressed: _rulerPoints.isEmpty ? null : _clearRulerPoints,
+                  icon: const Icon(Icons.clear_outlined),
+                  label: const Text('Limpar pontos'),
+                ),
               ],
             ),
             if (_selectedImageFile != null) ...[
@@ -463,18 +575,40 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                'Toque em 2 pontos da imagem para marcar o trecho de 1 metro da regua. Se marcar errado, clique em limpar pontos.',
+                style: theme.textTheme.bodyMedium,
+              ),
             ],
             if (_selectedImageBytes != null) ...[
               const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.memory(
-                  _selectedImageBytes!,
-                  height: 220,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
+              RulerPointSelector(
+                imageBytes: _selectedImageBytes!,
+                aspectRatio: _selectedImageAspectRatio ?? (4 / 3),
+                points: _rulerPoints,
+                onTapNormalized: _addRulerPoint,
               ),
+              if (_rulerPoints.length == 2) ...[
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _isEstimatingVolume
+                      ? null
+                      : _estimateVolumeFromRuler,
+                  icon: _isEstimatingVolume
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.straighten_outlined),
+                  label: Text(
+                    _isEstimatingVolume
+                        ? 'Estimando volume...'
+                        : 'Estimar volume pela regua',
+                  ),
+                ),
+              ],
             ],
             if (_imageAnalysisError != null) ...[
               const SizedBox(height: 12),
@@ -486,9 +620,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ],
+            if (_volumeEstimationError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _volumeEstimationError!,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF9E2A2B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             if (_latestImageAnalysis != null) ...[
               const SizedBox(height: 16),
               _buildImageAnalysisSummary(theme, _latestImageAnalysis!),
+            ],
+            if (_latestVolumeEstimate != null) ...[
+              const SizedBox(height: 16),
+              _buildVolumeEstimateSummary(theme, _latestVolumeEstimate!),
             ],
           ],
         ),
@@ -569,6 +717,67 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildVolumeEstimateSummary(
+    ThemeData theme,
+    ImageVolumeEstimateResponse estimate,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Volume assistido por regua',
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Volume estimado: ${estimate.estimatedVolumeM3.toStringAsFixed(3)} m3',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Confianca: ${estimate.confidenceLabel} (${estimate.confidenceScore.toStringAsFixed(2)})',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(estimate.rationale, style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              AnalysisMetricChip(
+                label: 'Comprimento',
+                value: '${estimate.estimatedLengthM.toStringAsFixed(2)} m',
+              ),
+              AnalysisMetricChip(
+                label: 'Altura',
+                value: '${estimate.estimatedHeightM.toStringAsFixed(2)} m',
+              ),
+              AnalysisMetricChip(
+                label: 'Profundidade',
+                value: '${estimate.estimatedDepthM.toStringAsFixed(2)} m',
+              ),
+              AnalysisMetricChip(
+                label: 'Px por metro',
+                value: estimate.metrics.pixelsPerMeter.toStringAsFixed(1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(estimate.disclaimer, style: theme.textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFormCard(ThemeData theme) {
     return Card(
       child: Padding(
@@ -581,7 +790,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('Nova analise', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
-                'O calculo continua fisico-matematico. A imagem apenas ajuda a orientar o preenchimento.',
+                'O calculo continua fisico-matematico. A imagem pode orientar a classificacao e, quando calibrada pela regua, fornecer um volume aparente semiautomatico.',
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 18),
@@ -782,7 +991,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Volume por imagem ainda nao esta habilitado neste MVP. Use a imagem para sugerir o tipo de residuo e depois escolha recipiente conhecido ou dimensoes manuais.',
+                      _latestVolumeEstimate == null
+                          ? 'Marque os 2 pontos de 1 metro da regua e gere o volume assistido antes de calcular a massa por imagem.'
+                          : 'Volume assistido pronto: ${_latestVolumeEstimate!.estimatedVolumeM3.toStringAsFixed(3)} m3. Voce ja pode calcular a massa usando este metodo.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: const Color(0xFF7A4510),
                         fontWeight: FontWeight.w600,

@@ -5,7 +5,7 @@ from app.models.enums import (
     VolumeMethod,
     WasteType,
 )
-from app.schemas.estimation import EstimateRequest, KnownContainerInput, ManualDimensionsInput
+from app.schemas.estimation import EstimateRequest, ImageAssistedInput, KnownContainerInput, ManualDimensionsInput
 from app.services.estimation_service import EstimationService
 
 
@@ -59,6 +59,29 @@ def test_estimate_with_image_assisted_volume_raises_clear_error():
     try:
         service.estimate(payload)
     except ValueError as exc:
-        assert "ainda nao calcula volume automaticamente" in str(exc)
+        assert "exige calibracao previa com a regua visivel" in str(exc)
     else:
         raise AssertionError("Era esperado erro para volume por imagem sem implementacao.")
+
+
+def test_estimate_with_image_assisted_precomputed_volume():
+    service = EstimationService()
+    payload = EstimateRequest(
+        waste_type=WasteType.ORGANIC,
+        volume_method=VolumeMethod.IMAGE_ASSISTED,
+        moisture_condition=MoistureCondition.DRY,
+        compaction_condition=CompactionCondition.LOOSE,
+        heterogeneity_condition=HeterogeneityCondition.HOMOGENEOUS,
+        image_assisted=ImageAssistedInput(
+            estimated_volume_m3=1.4,
+            estimated_length_m=2.1,
+            estimated_height_m=0.8,
+            estimated_depth_m=1.1,
+            confidence_score=0.61,
+        ),
+    )
+
+    result = service.estimate(payload)
+
+    assert result.estimated_volume_m3 == 1.4
+    assert result.estimated_mass_kg == 588.0
