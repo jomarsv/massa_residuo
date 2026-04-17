@@ -72,7 +72,7 @@ class EstimateResult(BaseModel):
 class EstimationRecord(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: str | int
     waste_type: WasteType
     volume_method: VolumeMethod
     estimated_volume_m3: float

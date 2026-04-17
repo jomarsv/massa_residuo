@@ -13,6 +13,9 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 IS_VERCEL = os.getenv("VERCEL") == "1"
 DATA_DIR = Path("/tmp") if IS_VERCEL else BASE_DIR / "data"
 DATABASE_PATH = DATA_DIR / "residuos_massa_estimada.db"
+FIREBASE_SERVICE_ACCOUNT_JSON = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+FIREBASE_COLLECTION_NAME = os.getenv("FIREBASE_COLLECTION_NAME", "estimation_history")
+PERSISTENCE_BACKEND = "firebase" if FIREBASE_SERVICE_ACCOUNT_JSON else "sqlite"
 
 APP_TITLE = "Residuos Massa Estimada API"
 APP_VERSION = "0.1.0"
@@ -52,3 +55,7 @@ CONFIDENCE_LABEL_BY_METHOD: dict[str, str] = {
     "dimensoes_manuais": "media",
     "estimativa_assistida_imagem": "baixa-media",
 }
+
+
+def use_firebase_persistence() -> bool:
+    return PERSISTENCE_BACKEND == "firebase"

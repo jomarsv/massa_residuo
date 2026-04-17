@@ -4,14 +4,20 @@
 
 - Backend FastAPI publicado separadamente no Vercel a partir de `backend/`.
 - Frontend Flutter Web publicado separadamente no Vercel a partir de `mobile/build/web`.
+- Persistencia compartilhada preferencialmente em Firebase Firestore.
 
 ## Observacao importante
 
-Em Vercel, o uso de SQLite neste MVP fica limitado a armazenamento temporario em `/tmp`. Isso permite demonstracao remota, mas nao historico compartilhado duravel entre execucoes. Para producao ou uso colaborativo real, sera necessario migrar a persistencia para um banco gerenciado.
+Quando `FIREBASE_SERVICE_ACCOUNT_JSON` estiver configurada, o backend passa a salvar o historico no Firestore. Sem essa credencial, o sistema usa SQLite como fallback e, no Vercel, esse fallback continua temporario em `/tmp`.
 
 ## Backend
 
 O arquivo `backend/index.py` exporta a aplicacao FastAPI no formato esperado pela Vercel.
+
+Variaveis recomendadas no projeto da Vercel:
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON`
+- `FIREBASE_COLLECTION_NAME` opcional
 
 ## Frontend
 

@@ -24,7 +24,7 @@ def list_history() -> list[EstimationRecord]:
 
 
 @router.get("/history/{record_id}", response_model=EstimationRecord)
-def get_history_item(record_id: int) -> EstimationRecord:
+def get_history_item(record_id: str) -> EstimationRecord:
     try:
         record = history_repository.get_by_id(record_id)
     except ValueError as exc:

@@ -5,13 +5,14 @@ from fastapi import FastAPI
 from app.api.routes.estimates import router as estimates_router
 from app.api.routes.health import router as health_router
 from app.api.routes.reference_data import router as reference_data_router
-from app.config.settings import API_PREFIX, APP_TITLE, APP_VERSION
+from app.config.settings import API_PREFIX, APP_TITLE, APP_VERSION, use_firebase_persistence
 from app.utils.database import init_db
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    init_db()
+    if not use_firebase_persistence():
+        init_db()
     yield
 
 

@@ -92,6 +92,7 @@ residuos-massa-estimada/
 - `uvicorn[standard]`
 - `pydantic`
 - `opencv-python-headless`
+- `firebase-admin`
 - `pytest`
 - `httpx`
 
@@ -127,6 +128,19 @@ residuos-massa-estimada/
 - Ajustar fatores empiricos configuraveis.
 - Expandir testes, observabilidade e validacao experimental.
 
+## Firebase
+
+Para persistencia remota compartilhada, voce precisa criar um projeto no Firebase.
+
+Minimo necessario:
+
+- criar um projeto Firebase
+- habilitar o Firestore Database
+- gerar uma Service Account no Google Cloud vinculado ao projeto
+- copiar o JSON da credencial para a variavel `FIREBASE_SERVICE_ACCOUNT_JSON`
+
+Em desenvolvimento local, se essa variavel nao existir, o backend continua usando SQLite como fallback.
+
 ## Como executar
 
 ### Backend
@@ -140,6 +154,8 @@ uvicorn app.main:app --reload
 ```
 
 API disponivel em `http://127.0.0.1:8000`.
+
+Para usar Firebase localmente, configure as variaveis de ambiente com base em `backend/.env.example`.
 
 ### Mobile
 
@@ -170,3 +186,4 @@ flutter test
 - A estimativa por imagem ainda e apenas um modulo preparado para evolucao futura.
 - Os fatores e densidades sao iniciais e precisam de calibracao com dados reais.
 - O app Flutter nesta fase e uma base funcional de interface, ainda sem fluxo completo de formulario e historico.
+- Sem `FIREBASE_SERVICE_ACCOUNT_JSON`, o backend usa fallback local em SQLite.
