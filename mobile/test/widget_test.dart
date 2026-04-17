@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:residuos_massa_estimada/data/models/calibration_summary.dart';
 import 'package:residuos_massa_estimada/data/models/estimate_response.dart';
 import 'package:residuos_massa_estimada/data/models/estimation_record.dart';
 import 'package:residuos_massa_estimada/data/models/image_analysis.dart';
@@ -46,6 +47,26 @@ class FakeBackendService extends BackendService {
   }
 
   @override
+  Future<CalibrationSummaryModel> fetchCalibrationSummary({
+    required String wasteType,
+    required String volumeMethod,
+    String? calibrationContext,
+  }) async {
+    return const CalibrationSummaryModel(
+      wasteType: 'plastico',
+      volumeMethod: 'recipiente_conhecido',
+      requestedContext: null,
+      appliedScope: 'nenhuma',
+      appliedMultiplier: 1.0,
+      appliedSampleCount: 0,
+      appliedContextLabel: null,
+      totalCalibratedSamples: 0,
+      totalOutlierCount: 0,
+      scenarioSummaries: [],
+    );
+  }
+
+  @override
   Future<EstimateResponseModel> createEstimate(
     Map<String, dynamic> payload,
   ) async {
@@ -70,7 +91,7 @@ void main() {
 
     expect(find.text('MassaR'), findsOneWidget);
     expect(find.text('Estimativa de Massa de Residuos'), findsOneWidget);
-    expect(find.textContaining('Fase 4.2'), findsOneWidget);
+    expect(find.textContaining('Fase 4.3'), findsOneWidget);
     expect(find.text('Analise assistida por imagem'), findsOneWidget);
     expect(
       find.text('O que ha no resíduo ou dentro dos sacos?'),

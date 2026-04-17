@@ -3,6 +3,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from app.repositories.history_repository import HistoryRepository
 from app.schemas.estimation import (
     CalibrationRequest,
+    CalibrationSummaryResponse,
+    CalibrationScenarioSummary,
     EstimateRequest,
     EstimateResponse,
     EstimationRecord,
@@ -22,13 +24,17 @@ cv_support_service = ComputerVisionSupportService()
 @router.post("", response_model=EstimateResponse, status_code=status.HTTP_201_CREATED)
 def create_estimate(payload: EstimateRequest) -> EstimateResponse:
     try:
-        calibration_multiplier = history_repository.get_calibration_multiplier(
-            payload.waste_type.value,
-            payload.volume_method.value,
+        calibration_summary = history_repository.get_calibration_summary(
+            waste_type=payload.waste_type.value,
+            volume_method=payload.volume_method.value,
+            calibration_context=payload.calibration_context,
         )
         result = estimation_service.estimate(
             payload,
-            calibration_multiplier=calibration_multiplier,
+            calibration_multiplier=calibration_summary["applied_multiplier"],
+            calibration_sample_count=calibration_summary["applied_sample_count"],
+            calibration_scope=calibration_summary["applied_scope"],
+            calibration_context_label=calibration_summary["applied_context_label"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -132,3 +138,30 @@ def calibrate_history_item(record_id: str, payload: CalibrationRequest) -> Estim
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return EstimationRecord.model_validate(record)
+
+
+@router.get("/calibration-summary", response_model=CalibrationSummaryResponse)
+def get_calibration_summary(
+    waste_type: str,
+    volume_method: str,
+    calibration_context: str | None = None,
+) -> CalibrationSummaryResponse:
+    summary = history_repository.get_calibration_summary(
+        waste_type=waste_type,
+        volume_method=volume_method,
+        calibration_context=calibration_context,
+    )
+    return CalibrationSummaryResponse(
+        waste_type=waste_type,
+        volume_method=volume_method,
+        requested_context=summary["requested_context"],
+        applied_scope=summary["applied_scope"],
+        applied_multiplier=summary["applied_multiplier"],
+        applied_sample_count=summary["applied_sample_count"],
+        applied_context_label=summary["applied_context_label"],
+        total_calibrated_samples=summary["total_calibrated_samples"],
+        total_outlier_count=summary["total_outlier_count"],
+        scenario_summaries=[
+            CalibrationScenarioSummary(**item) for item in summary["scenario_summaries"]
+        ],
+    )

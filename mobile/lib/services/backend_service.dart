@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:mime/mime.dart';
 
 import '../data/models/estimate_response.dart';
+import '../data/models/calibration_summary.dart';
 import '../data/models/estimation_record.dart';
 import '../data/models/image_analysis.dart';
 import '../data/models/image_volume_estimate.dart';
@@ -102,6 +103,34 @@ class BackendService {
     return payload
         .map((item) => EstimationRecord.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<CalibrationSummaryModel> fetchCalibrationSummary({
+    required String wasteType,
+    required String volumeMethod,
+    String? calibrationContext,
+  }) async {
+    final queryParameters = <String, String>{
+      'waste_type': wasteType,
+      'volume_method': volumeMethod,
+    };
+    final trimmedContext = calibrationContext?.trim();
+    if (trimmedContext != null && trimmedContext.isNotEmpty) {
+      queryParameters['calibration_context'] = trimmedContext;
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/estimates/calibration-summary',
+    ).replace(queryParameters: queryParameters);
+    final response = await _client.get(uri);
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorMessage(response.body));
+    }
+
+    return CalibrationSummaryModel.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<EstimationRecord> calibrateEstimate({

@@ -11,6 +11,7 @@ class EstimationRecord {
     required this.confidenceLevel,
     required this.createdAt,
     this.contentDescription,
+    this.calibrationContext,
     this.actualMassKg,
     this.calibrationNotes,
     this.calibratedAt,
@@ -28,6 +29,7 @@ class EstimationRecord {
   final String confidenceLevel;
   final DateTime createdAt;
   final String? contentDescription;
+  final String? calibrationContext;
   final double? actualMassKg;
   final String? calibrationNotes;
   final DateTime? calibratedAt;
@@ -46,6 +48,7 @@ class EstimationRecord {
       confidenceLevel: json['confidence_level'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
       contentDescription: json['content_description'] as String?,
+      calibrationContext: json['calibration_context'] as String?,
       actualMassKg: (json['actual_mass_kg'] as num?)?.toDouble(),
       calibrationNotes: json['calibration_notes'] as String?,
       calibratedAt: json['calibrated_at'] == null

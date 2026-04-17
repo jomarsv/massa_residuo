@@ -15,7 +15,14 @@ class EstimationService:
     def __init__(self) -> None:
         self.cv_support_service = ComputerVisionSupportService()
 
-    def estimate(self, payload: EstimateRequest, calibration_multiplier: float = 1.0) -> EstimateResult:
+    def estimate(
+        self,
+        payload: EstimateRequest,
+        calibration_multiplier: float = 1.0,
+        calibration_sample_count: int = 0,
+        calibration_scope: str = "nenhuma",
+        calibration_context_label: str | None = None,
+    ) -> EstimateResult:
         estimated_volume = self._estimate_volume(payload) * calibration_multiplier
         density = WASTE_DENSITIES_KG_M3[payload.waste_type]
         moisture_factor = MOISTURE_FACTORS[payload.moisture_condition]
@@ -38,6 +45,9 @@ class EstimationService:
                 heterogeneity_factor=heterogeneity_factor,
             ),
             calibration_multiplier=round(calibration_multiplier, 3),
+            calibration_sample_count=calibration_sample_count,
+            calibration_scope=calibration_scope,
+            calibration_context_label=calibration_context_label,
             estimated_mass_kg=round(estimated_mass, 2),
             lower_bound_kg=round(lower_bound, 2),
             upper_bound_kg=round(upper_bound, 2),

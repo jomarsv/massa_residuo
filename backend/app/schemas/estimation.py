@@ -96,6 +96,7 @@ class EstimateRequest(BaseModel):
     manual_dimensions: Optional[ManualDimensionsInput] = None
     image_assisted: Optional[ImageAssistedInput] = None
     content_description: Optional[str] = Field(default=None, max_length=300)
+    calibration_context: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
@@ -122,6 +123,9 @@ class EstimateResult(BaseModel):
     density_kg_m3: float
     applied_factors: AppliedFactors
     calibration_multiplier: float = 1.0
+    calibration_sample_count: int = 0
+    calibration_scope: str = "nenhuma"
+    calibration_context_label: Optional[str] = None
     estimated_mass_kg: float
     lower_bound_kg: float
     upper_bound_kg: float
@@ -143,6 +147,7 @@ class EstimationRecord(BaseModel):
     confidence_level: str
     created_at: datetime
     content_description: Optional[str] = None
+    calibration_context: Optional[str] = None
     actual_mass_kg: Optional[float] = None
     calibration_notes: Optional[str] = None
     calibrated_at: Optional[datetime] = None
@@ -157,6 +162,29 @@ class EstimateResponse(BaseModel):
 class CalibrationRequest(BaseModel):
     actual_mass_kg: float = Field(..., gt=0)
     notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class CalibrationScenarioSummary(BaseModel):
+    label: str
+    calibration_context: Optional[str] = None
+    sample_count: int
+    median_multiplier: float
+    min_multiplier: float
+    max_multiplier: float
+    outlier_count: int
+
+
+class CalibrationSummaryResponse(BaseModel):
+    waste_type: WasteType
+    volume_method: VolumeMethod
+    requested_context: Optional[str] = None
+    applied_scope: str
+    applied_multiplier: float
+    applied_sample_count: int
+    applied_context_label: Optional[str] = None
+    total_calibrated_samples: int
+    total_outlier_count: int
+    scenario_summaries: list[CalibrationScenarioSummary]
 
 
 class ReferenceDataResponse(BaseModel):

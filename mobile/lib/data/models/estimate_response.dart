@@ -28,6 +28,9 @@ class EstimateResultModel {
     required this.densityKgM3,
     required this.appliedFactors,
     required this.calibrationMultiplier,
+    required this.calibrationSampleCount,
+    required this.calibrationScope,
+    this.calibrationContextLabel,
     required this.estimatedMassKg,
     required this.lowerBoundKg,
     required this.upperBoundKg,
@@ -41,6 +44,9 @@ class EstimateResultModel {
   final double densityKgM3;
   final AppliedFactorsModel appliedFactors;
   final double calibrationMultiplier;
+  final int calibrationSampleCount;
+  final String calibrationScope;
+  final String? calibrationContextLabel;
   final double estimatedMassKg;
   final double lowerBoundKg;
   final double upperBoundKg;
@@ -58,6 +64,10 @@ class EstimateResultModel {
       ),
       calibrationMultiplier:
           (json['calibration_multiplier'] as num?)?.toDouble() ?? 1.0,
+      calibrationSampleCount:
+          (json['calibration_sample_count'] as num?)?.toInt() ?? 0,
+      calibrationScope: json['calibration_scope'] as String? ?? 'nenhuma',
+      calibrationContextLabel: json['calibration_context_label'] as String?,
       estimatedMassKg: (json['estimated_mass_kg'] as num).toDouble(),
       lowerBoundKg: (json['lower_bound_kg'] as num).toDouble(),
       upperBoundKg: (json['upper_bound_kg'] as num).toDouble(),

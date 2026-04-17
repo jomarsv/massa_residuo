@@ -108,4 +108,38 @@ def test_estimate_applies_calibration_multiplier():
 
     assert result.estimated_volume_m3 == 1.25
     assert result.calibration_multiplier == 1.25
+    assert result.calibration_sample_count == 0
+    assert result.calibration_scope == "nenhuma"
     assert result.estimated_mass_kg == 525.0
+
+
+def test_estimate_exposes_calibration_scope_metadata():
+    service = EstimationService()
+    payload = EstimateRequest(
+        waste_type=WasteType.ORGANIC,
+        volume_method=VolumeMethod.IMAGE_ASSISTED,
+        moisture_condition=MoistureCondition.DRY,
+        compaction_condition=CompactionCondition.LOOSE,
+        heterogeneity_condition=HeterogeneityCondition.HOMOGENEOUS,
+        calibration_context="poda ensacada",
+        image_assisted=ImageAssistedInput(
+            estimated_volume_m3=1.0,
+            estimated_length_m=1.5,
+            estimated_height_m=0.8,
+            estimated_depth_m=1.0,
+            confidence_score=0.62,
+        ),
+    )
+
+    result = service.estimate(
+        payload,
+        calibration_multiplier=1.1,
+        calibration_sample_count=3,
+        calibration_scope="cenario",
+        calibration_context_label="Poda ensacada",
+    )
+
+    assert result.calibration_multiplier == 1.1
+    assert result.calibration_sample_count == 3
+    assert result.calibration_scope == "cenario"
+    assert result.calibration_context_label == "Poda ensacada"

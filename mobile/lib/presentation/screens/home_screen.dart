@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
+import '../../data/models/calibration_summary.dart';
 import '../../data/models/estimate_response.dart';
 import '../../data/models/estimation_record.dart';
 import '../../data/models/image_analysis.dart';
@@ -40,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _heightController = TextEditingController(text: '1.0');
   final _imagePathController = TextEditingController();
   final _contentDescriptionController = TextEditingController();
+  final _calibrationContextController = TextEditingController();
   final _notesController = TextEditingController();
   final _actualMassController = TextEditingController();
   final _calibrationNotesController = TextEditingController();
@@ -47,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late Future<AppStatus> _statusFuture;
   late Future<List<EstimationRecord>> _historyFuture;
+  late Future<CalibrationSummaryModel> _calibrationSummaryFuture;
 
   late List<WasteOption> _wasteOptions;
   late List<OptionItem> _volumeMethods;
@@ -87,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _heterogeneityOptions = _referenceRepository.getHeterogeneityOptions();
     _statusFuture = widget.backendService.checkStatus();
     _historyFuture = widget.backendService.fetchHistory();
+    _calibrationSummaryFuture = _loadCalibrationSummary();
   }
 
   @override
@@ -98,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _heightController.dispose();
     _imagePathController.dispose();
     _contentDescriptionController.dispose();
+    _calibrationContextController.dispose();
     _notesController.dispose();
     _actualMassController.dispose();
     _calibrationNotesController.dispose();
@@ -227,6 +232,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _latestImageAnalysis = analysis;
         if (analysis.suggestion.suggestedWasteType != null) {
           _selectedWasteType = analysis.suggestion.suggestedWasteType!;
+          _calibrationSummaryFuture = _loadCalibrationSummary();
         }
 
         final currentNotes = _notesController.text.trim();
@@ -283,6 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _latestVolumeEstimate = estimate;
         _selectedVolumeMethod = 'estimativa_assistida_imagem';
+        _calibrationSummaryFuture = _loadCalibrationSummary();
         final currentNotes = _notesController.text.trim();
         final volumeNote =
             'Volume assistido por regua: ${estimate.estimatedVolumeM3.toStringAsFixed(3)} m3. ${estimate.rationale}';
@@ -339,6 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _latestEstimate = response;
         _historyFuture = widget.backendService.fetchHistory();
+        _calibrationSummaryFuture = _loadCalibrationSummary();
         _actualMassController.clear();
         _calibrationNotesController.clear();
         _calibrationError = null;
@@ -400,6 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
           record: updatedRecord,
         );
         _historyFuture = widget.backendService.fetchHistory();
+        _calibrationSummaryFuture = _loadCalibrationSummary();
         _calibrationSuccess =
             'Peso real salvo. As proximas estimativas por imagem podem usar essa calibracao.';
       });
@@ -419,6 +428,31 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<CalibrationSummaryModel> _loadCalibrationSummary() {
+    return widget.backendService.fetchCalibrationSummary(
+      wasteType: _selectedWasteType,
+      volumeMethod: _selectedVolumeMethod,
+      calibrationContext: _calibrationContextController.text,
+    );
+  }
+
+  void _refreshCalibrationSummary() {
+    setState(() {
+      _calibrationSummaryFuture = _loadCalibrationSummary();
+    });
+  }
+
+  String _labelForCalibrationScope(String scope) {
+    switch (scope) {
+      case 'cenario':
+        return 'cenario';
+      case 'geral':
+        return 'historico geral';
+      default:
+        return 'sem calibracao';
+    }
+  }
+
   Map<String, dynamic> _buildPayload() {
     final payload = <String, dynamic>{
       'waste_type': _selectedWasteType,
@@ -429,6 +463,9 @@ class _HomeScreenState extends State<HomeScreen> {
       'content_description': _contentDescriptionController.text.trim().isEmpty
           ? null
           : _contentDescriptionController.text.trim(),
+      'calibration_context': _calibrationContextController.text.trim().isEmpty
+          ? null
+          : _calibrationContextController.text.trim(),
       'notes': _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
@@ -546,7 +583,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Fase 4.2: volume assistido por regua, calibracao com peso real e analise hibrida antes do calculo.',
+                  'Fase 4.3: painel de calibracao por cenario, contagem de amostras e ajuste historico com filtro simples de outliers.',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 18),
@@ -580,6 +617,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildImageAssistCard(theme),
                 const SizedBox(height: 18),
                 _buildFormCard(theme),
+                const SizedBox(height: 18),
+                _buildCalibrationPanel(theme),
                 if (_latestEstimate != null) ...[
                   const SizedBox(height: 18),
                   _buildResultCard(theme, _latestEstimate!),
@@ -876,6 +915,170 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildCalibrationPanel(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Painel de calibracao',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _refreshCalibrationSummary,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Resumo das amostras com peso real para o tipo, metodo e cenario selecionados.',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            FutureBuilder<CalibrationSummaryModel>(
+              future: _calibrationSummaryFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Text(
+                    'Nao foi possivel carregar o painel de calibracao.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF9E2A2B),
+                    ),
+                  );
+                }
+
+                final summary = snapshot.data!;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: 220,
+                          child: ResultMetricTile(
+                            label: 'Multiplicador aplicado',
+                            value: summary.appliedMultiplier.toStringAsFixed(3),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 220,
+                          child: ResultMetricTile(
+                            label: 'Amostras usadas',
+                            value: summary.appliedSampleCount.toString(),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 220,
+                          child: ResultMetricTile(
+                            label: 'Escopo aplicado',
+                            value: _labelForCalibrationScope(
+                              summary.appliedScope,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 220,
+                          child: ResultMetricTile(
+                            label: 'Amostras calibradas',
+                            value: summary.totalCalibratedSamples.toString(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (summary.appliedContextLabel != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        'Cenario aplicado: ${summary.appliedContextLabel!}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    if (summary.totalOutlierCount > 0) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Outliers filtrados nesta agregacao: ${summary.totalOutlierCount}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF7A4510),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    Text('Cenarios salvos', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    if (summary.scenarioSummaries.isEmpty)
+                      Text(
+                        'Nenhuma amostra calibrada ainda para este tipo e metodo.',
+                        style: theme.textTheme.bodyMedium,
+                      )
+                    else
+                      Column(
+                        children: summary.scenarioSummaries.map((item) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surface,
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.label,
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Amostras: ${item.sampleCount} | Mediana: ${item.medianMultiplier.toStringAsFixed(3)} | Faixa: ${item.minMultiplier.toStringAsFixed(3)} a ${item.maxMultiplier.toStringAsFixed(3)}',
+                                    style: theme.textTheme.bodyMedium,
+                                  ),
+                                  if (item.outlierCount > 0) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Outliers filtrados: ${item.outlierCount}',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: const Color(0xFF7A4510),
+                                          ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFormCard(ThemeData theme) {
     return Card(
       child: Padding(
@@ -912,8 +1115,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     )
                     .toList(),
-                onChanged: (value) =>
-                    setState(() => _selectedWasteType = value!),
+                onChanged: (value) => setState(() {
+                  _selectedWasteType = value!;
+                  _calibrationSummaryFuture = _loadCalibrationSummary();
+                }),
               ),
               const SizedBox(height: 14),
               _buildDropdown<String>(
@@ -927,8 +1132,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     )
                     .toList(),
-                onChanged: (value) =>
-                    setState(() => _selectedVolumeMethod = value!),
+                onChanged: (value) => setState(() {
+                  _selectedVolumeMethod = value!;
+                  _calibrationSummaryFuture = _loadCalibrationSummary();
+                }),
               ),
               const SizedBox(height: 14),
               Wrap(
@@ -1207,6 +1414,18 @@ class _HomeScreenState extends State<HomeScreen> {
               'Multiplicador de calibracao historica: ${result.calibrationMultiplier.toStringAsFixed(3)}',
               style: theme.textTheme.bodyMedium,
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Escopo aplicado: ${_labelForCalibrationScope(result.calibrationScope)} | Amostras usadas: ${result.calibrationSampleCount}',
+              style: theme.textTheme.bodyMedium,
+            ),
+            if (result.calibrationContextLabel != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Cenario aplicado: ${result.calibrationContextLabel!}',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
             if (estimate.record.contentDescription != null &&
                 estimate.record.contentDescription!.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -1215,6 +1434,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: theme.textTheme.bodyMedium,
               ),
             ],
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _calibrationContextController,
+              onChanged: (_) => _refreshCalibrationSummary(),
+              decoration: const InputDecoration(
+                labelText: 'Cenario de calibracao',
+                helperText:
+                    'Ex.: poda ensacada, entulho solto, plastico compactado.',
+              ),
+            ),
             const SizedBox(height: 16),
             Text('Calibrar com peso real', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
@@ -1396,6 +1625,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 'Conteudo informado: ${record.contentDescription!}',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ],
+                            if (record.calibrationContext != null &&
+                                record.calibrationContext!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Cenario: ${record.calibrationContext!}',
                                 style: theme.textTheme.bodyMedium,
                               ),
                             ],
