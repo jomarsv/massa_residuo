@@ -1,11 +1,18 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.estimates import router as estimates_router
 from app.api.routes.health import router as health_router
 from app.api.routes.reference_data import router as reference_data_router
-from app.config.settings import API_PREFIX, APP_TITLE, APP_VERSION, use_firebase_persistence
+from app.config.settings import (
+    ALLOWED_CORS_ORIGINS,
+    API_PREFIX,
+    APP_TITLE,
+    APP_VERSION,
+    use_firebase_persistence,
+)
 from app.utils.database import init_db
 
 
@@ -24,6 +31,14 @@ app = FastAPI(
         "API inicial para estimativa de massa de residuos solidos com base em "
         "volume aparente, densidade configuravel e fatores de correcao."
     ),
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(health_router, prefix=API_PREFIX)

@@ -16,6 +16,13 @@ DATABASE_PATH = DATA_DIR / "residuos_massa_estimada.db"
 FIREBASE_SERVICE_ACCOUNT_JSON = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
 FIREBASE_COLLECTION_NAME = os.getenv("FIREBASE_COLLECTION_NAME", "estimation_history")
 PERSISTENCE_BACKEND = "firebase" if FIREBASE_SERVICE_ACCOUNT_JSON else "sqlite"
+ALLOWED_CORS_ORIGINS = [
+    "https://residuos-massa-estimada-web.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
 
 APP_TITLE = "Residuos Massa Estimada API"
 APP_VERSION = "0.1.0"
