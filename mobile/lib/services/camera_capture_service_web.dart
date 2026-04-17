@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:typed_data';
 
 import '../data/models/selected_image_data.dart';
 import 'camera_capture_service.dart';
@@ -26,7 +26,7 @@ class WebCameraCaptureService implements CameraCaptureService {
       final reader = html.FileReader();
       reader.onLoad.listen((_) {
         final result = reader.result;
-        if (result is! ByteBuffer) {
+        if (result is! String || !result.startsWith('data:')) {
           if (!completer.isCompleted) {
             completer.completeError(
               StateError('Nao foi possivel ler a imagem capturada.'),
@@ -36,10 +36,18 @@ class WebCameraCaptureService implements CameraCaptureService {
         }
 
         if (!completer.isCompleted) {
+          final base64MarkerIndex = result.indexOf(',');
+          if (base64MarkerIndex == -1) {
+            completer.completeError(
+              StateError('Nao foi possivel decodificar a imagem capturada.'),
+            );
+            return;
+          }
+
           completer.complete(
             SelectedImageData(
               fileName: file.name.isNotEmpty ? file.name : 'captura-camera.jpg',
-              bytes: Uint8List.view(result),
+              bytes: base64Decode(result.substring(base64MarkerIndex + 1)),
             ),
           );
         }
@@ -51,7 +59,7 @@ class WebCameraCaptureService implements CameraCaptureService {
           );
         }
       });
-      reader.readAsArrayBuffer(file);
+      reader.readAsDataUrl(file);
     });
 
     input.click();

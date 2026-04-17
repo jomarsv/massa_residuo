@@ -125,7 +125,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       setState(() {
-        _imageAnalysisError = error.toString().replaceFirst('Exception: ', '');
+        _imageAnalysisError = error
+            .toString()
+            .replaceFirst('Exception: ', '')
+            .replaceFirst('Bad state: ', '');
       });
     }
   }
@@ -185,7 +188,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       setState(() {
-        _imageAnalysisError = error.toString().replaceFirst('Exception: ', '');
+        _imageAnalysisError = error
+            .toString()
+            .replaceFirst('Exception: ', '')
+            .replaceFirst('Bad state: ', '');
       });
     } finally {
       if (mounted) {
