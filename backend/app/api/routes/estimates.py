@@ -1,13 +1,20 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.repositories.history_repository import HistoryRepository
-from app.schemas.estimation import EstimateRequest, EstimateResponse, EstimationRecord
+from app.schemas.estimation import (
+    EstimateRequest,
+    EstimateResponse,
+    EstimationRecord,
+    ImageAnalysisResponse,
+)
+from app.services.cv_service import ComputerVisionSupportService
 from app.services.estimation_service import EstimationService
 
 router = APIRouter(prefix="/estimates", tags=["estimates"])
 
 estimation_service = EstimationService()
 history_repository = HistoryRepository()
+cv_support_service = ComputerVisionSupportService()
 
 
 @router.post("", response_model=EstimateResponse, status_code=status.HTTP_201_CREATED)
@@ -15,6 +22,34 @@ def create_estimate(payload: EstimateRequest) -> EstimateResponse:
     result = estimation_service.estimate(payload)
     stored_record = history_repository.save_estimation(payload, result)
     return EstimateResponse(result=result, record=EstimationRecord.model_validate(stored_record))
+
+
+@router.post("/analyze-image", response_model=ImageAnalysisResponse)
+async def analyze_image(file: UploadFile = File(...)) -> ImageAnalysisResponse:
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Envie um arquivo de imagem valido.",
+        )
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O arquivo enviado esta vazio.",
+        )
+
+    try:
+        return cv_support_service.analyze_uploaded_image(
+            filename=file.filename or "imagem-sem-nome",
+            content_type=file.content_type,
+            file_bytes=file_bytes,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/history", response_model=list[EstimationRecord])

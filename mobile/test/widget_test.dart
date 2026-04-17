@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:residuos_massa_estimada/data/models/estimate_response.dart';
 import 'package:residuos_massa_estimada/data/models/estimation_record.dart';
+import 'package:residuos_massa_estimada/data/models/image_analysis.dart';
 import 'package:residuos_massa_estimada/domain/entities/app_status.dart';
 import 'package:residuos_massa_estimada/presentation/screens/home_screen.dart';
 import 'package:residuos_massa_estimada/services/backend_service.dart';
@@ -50,6 +51,11 @@ class FakeBackendService extends BackendService {
   ) async {
     throw UnimplementedError();
   }
+
+  @override
+  Future<ImageAnalysisResponse> analyzeImage(file) async {
+    throw UnimplementedError();
+  }
 }
 
 void main() {
@@ -60,7 +66,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Estimativa de massa de residuos'), findsOneWidget);
-    expect(find.textContaining('Fase 2'), findsOneWidget);
+    expect(find.textContaining('Fase 3'), findsOneWidget);
+    expect(find.text('Analise assistida por imagem'), findsOneWidget);
     expect(find.text('Nova analise'), findsOneWidget);
     expect(find.text('Calcular estimativa'), findsOneWidget);
   });

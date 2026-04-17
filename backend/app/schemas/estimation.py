@@ -28,6 +28,30 @@ class ImageAssistedInput(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500)
 
 
+class ImageAnalysisMetrics(BaseModel):
+    width_px: int
+    height_px: int
+    mean_brightness: float
+    mean_saturation: float
+    edge_density: float
+
+
+class ImageAnalysisSuggestion(BaseModel):
+    suggested_waste_type: Optional[WasteType] = None
+    suggested_volume_method: VolumeMethod = VolumeMethod.IMAGE_ASSISTED
+    confidence_score: float
+    confidence_label: str
+    rationale: str
+
+
+class ImageAnalysisResponse(BaseModel):
+    filename: str
+    content_type: Optional[str] = None
+    metrics: ImageAnalysisMetrics
+    suggestion: ImageAnalysisSuggestion
+    disclaimer: str
+
+
 class EstimateRequest(BaseModel):
     waste_type: WasteType
     volume_method: VolumeMethod

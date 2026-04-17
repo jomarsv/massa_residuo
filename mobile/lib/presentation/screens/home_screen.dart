@@ -1,12 +1,17 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/models/estimate_response.dart';
 import '../../data/models/estimation_record.dart';
+import '../../data/models/image_analysis.dart';
 import '../../data/models/option_item.dart';
 import '../../data/models/waste_option.dart';
 import '../../data/repositories/reference_data_repository.dart';
 import '../../domain/entities/app_status.dart';
 import '../../services/backend_service.dart';
+import '../../widgets/analysis_metric_chip.dart';
 import '../../widgets/result_metric_tile.dart';
 import '../../widgets/status_badge.dart';
 
@@ -47,8 +52,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String _selectedHeterogeneityCondition = 'homogeneo';
 
   bool _isSubmitting = false;
+  bool _isAnalyzingImage = false;
   String? _submissionError;
+  String? _imageAnalysisError;
   EstimateResponseModel? _latestEstimate;
+  ImageAnalysisResponse? _latestImageAnalysis;
+  PlatformFile? _selectedImageFile;
+  Uint8List? _selectedImageBytes;
 
   @override
   void initState() {
@@ -72,6 +82,78 @@ class _HomeScreenState extends State<HomeScreen> {
     _imagePathController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.first;
+    setState(() {
+      _selectedImageFile = file;
+      _selectedImageBytes = file.bytes;
+      _imagePathController.text = file.name;
+      _selectedVolumeMethod = 'estimativa_assistida_imagem';
+      _imageAnalysisError = null;
+    });
+  }
+
+  Future<void> _analyzeSelectedImage() async {
+    final file = _selectedImageFile;
+    if (file == null) {
+      setState(() {
+        _imageAnalysisError =
+            'Selecione uma imagem antes de solicitar a analise.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isAnalyzingImage = true;
+      _imageAnalysisError = null;
+    });
+
+    try {
+      final analysis = await widget.backendService.analyzeImage(file);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _latestImageAnalysis = analysis;
+        _selectedVolumeMethod = analysis.suggestion.suggestedVolumeMethod;
+        if (analysis.suggestion.suggestedWasteType != null) {
+          _selectedWasteType = analysis.suggestion.suggestedWasteType!;
+        }
+
+        final currentNotes = _notesController.text.trim();
+        final analysisNote =
+            'Imagem analisada: ${analysis.filename}. ${analysis.suggestion.rationale}';
+        _notesController.text = currentNotes.isEmpty
+            ? analysisNote
+            : '$currentNotes\n$analysisNote';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _imageAnalysisError = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAnalyzingImage = false;
+        });
+      }
+    }
   }
 
   Future<void> _submitEstimate() async {
@@ -144,7 +226,9 @@ class _HomeScreenState extends State<HomeScreen> {
         'image_path': _imagePathController.text.trim().isEmpty
             ? null
             : _imagePathController.text.trim(),
-        'notes': 'Entrada assistida por imagem via MVP',
+        'notes':
+            _latestImageAnalysis?.suggestion.rationale ??
+            'Entrada assistida por imagem via MVP',
       };
     }
 
@@ -200,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Fase 2: formulario completo, calculo via API e historico remoto com Firebase.',
+                  'Fase 3: upload real de imagem, analise assistida com OpenCV e sugestoes de preenchimento antes do calculo.',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 18),
@@ -231,6 +315,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
                 const SizedBox(height: 24),
+                _buildImageAssistCard(theme),
+                const SizedBox(height: 18),
                 _buildFormCard(theme),
                 if (_latestEstimate != null) ...[
                   const SizedBox(height: 18),
@@ -240,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildHistoryCard(theme),
                 const SizedBox(height: 10),
                 Text(
-                  'Aviso: todo valor exibido pelo sistema deve ser tratado como estimativa, nunca como pesagem real.',
+                  'Aviso: a imagem apenas sugere preenchimento. O usuario continua responsavel por confirmar o tipo de residuo e o metodo de volume.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF7A4510),
@@ -250,6 +336,151 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildImageAssistCard(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Analise assistida por imagem',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Selecione uma imagem do residuo para obter uma sugestao visual de preenchimento. A confianca continua limitada.',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  onPressed: _pickImage,
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: const Text('Selecionar imagem'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _isAnalyzingImage ? null : _analyzeSelectedImage,
+                  icon: _isAnalyzingImage
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.center_focus_strong_outlined),
+                  label: Text(
+                    _isAnalyzingImage ? 'Analisando...' : 'Analisar imagem',
+                  ),
+                ),
+              ],
+            ),
+            if (_selectedImageFile != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Arquivo selecionado: ${_selectedImageFile!.name}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            if (_selectedImageBytes != null) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.memory(
+                  _selectedImageBytes!,
+                  height: 220,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ],
+            if (_imageAnalysisError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _imageAnalysisError!,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF9E2A2B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            if (_latestImageAnalysis != null) ...[
+              const SizedBox(height: 16),
+              _buildImageAnalysisSummary(theme, _latestImageAnalysis!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageAnalysisSummary(
+    ThemeData theme,
+    ImageAnalysisResponse analysis,
+  ) {
+    final suggestion = analysis.suggestion;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Sugestao assistida', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            suggestion.suggestedWasteType == null
+                ? 'Nenhum tipo sugerido com confianca suficiente.'
+                : 'Tipo sugerido: ${_referenceRepository.labelForWasteType(suggestion.suggestedWasteType!)}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Confianca: ${suggestion.confidenceLabel} (${suggestion.confidenceScore.toStringAsFixed(2)})',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(suggestion.rationale, style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              AnalysisMetricChip(
+                label: 'Resolucao',
+                value:
+                    '${analysis.metrics.widthPx}x${analysis.metrics.heightPx}',
+              ),
+              AnalysisMetricChip(
+                label: 'Brilho',
+                value: analysis.metrics.meanBrightness.toStringAsFixed(1),
+              ),
+              AnalysisMetricChip(
+                label: 'Saturacao',
+                value: analysis.metrics.meanSaturation.toStringAsFixed(1),
+              ),
+              AnalysisMetricChip(
+                label: 'Bordas',
+                value: analysis.metrics.edgeDensity.toStringAsFixed(3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(analysis.disclaimer, style: theme.textTheme.bodyMedium),
+        ],
       ),
     );
   }
@@ -266,7 +497,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('Nova analise', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
-                'O calculo usa densidade aparente, volume e fatores de correcao. A IA segue como apoio opcional.',
+                'O calculo continua fisico-matematico. A imagem apenas ajuda a orientar o preenchimento.',
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 18),
@@ -446,10 +677,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ] else ...[
                 TextFormField(
                   controller: _imagePathController,
+                  readOnly: true,
                   decoration: const InputDecoration(
-                    labelText: 'Caminho ou identificador da imagem',
+                    labelText: 'Imagem selecionada',
                     helperText:
-                        'Opcional no MVP. O backend ainda nao extrai volume automaticamente.',
+                        'Use a secao de analise assistida para enviar a imagem.',
                   ),
                 ),
               ],
@@ -457,7 +689,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TextFormField(
                 controller: _notesController,
                 minLines: 2,
-                maxLines: 4,
+                maxLines: 5,
                 decoration: const InputDecoration(
                   labelText: 'Observacoes',
                   helperText:
