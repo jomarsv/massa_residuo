@@ -28,7 +28,7 @@ class BackendService {
   static String _resolveBaseUrl() {
     const configuredBaseUrl = String.fromEnvironment('BACKEND_BASE_URL');
     if (configuredBaseUrl.isNotEmpty) {
-      return configuredBaseUrl;
+      return _normalizeBaseUrl(configuredBaseUrl);
     }
 
     if (kIsWeb) {
@@ -36,6 +36,17 @@ class BackendService {
     }
 
     return 'http://10.0.2.2:8000/api/v1';
+  }
+
+  static String _normalizeBaseUrl(String rawBaseUrl) {
+    final trimmed = rawBaseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
+    if (trimmed.endsWith('/api/v1')) {
+      return trimmed;
+    }
+    if (trimmed.endsWith('/api')) {
+      return '$trimmed/v1';
+    }
+    return '$trimmed/api/v1';
   }
 
   Future<AppStatus> checkStatus() async {
